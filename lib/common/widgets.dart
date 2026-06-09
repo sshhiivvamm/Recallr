@@ -1,306 +1,1045 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:isar/isar.dart';
-import 'package:recallr/theme/ui_helpers.dart';
+import 'package:metadata_fetch/metadata_fetch.dart';
+import 'package:recallr/theme/recallr_colors.dart';
 
 import '../core/database/providers/isar_provider.dart';
+import '../core/features/category/tag_list_provider.dart';
+import '../core/features/collections/collection_provider.dart';
 import '../data/models/Link/link_model.dart';
 import '../data/models/Tag/tag_model.dart';
-import 'package:metadata_fetch/metadata_fetch.dart';
-import '../theme/recallr_colors.dart';
-import '../theme/recallr_textstyle.dart';
+import '../data/models/collection_model.dart';
+
+// ── Public API — unchanged call-site ─────────────────────────────────────────
 
 class ReWid {
-  TextEditingController linkController = TextEditingController();
-  TextEditingController titleController = TextEditingController();
-  TextEditingController notesController = TextEditingController();
-
-  final tagListProvider = StreamProvider<List<TagModel>>((ref) async* {
-    final isar = await ref.watch(isarProvider.future);
-
-    yield* isar.tagModels.where().sortByName().watch(fireImmediately: true);
-  });
-
-  String getSiteName(String domain) {
-    if (domain.contains("youtube")) return "YouTube";
-    if (domain.contains("instagram")) return "Instagram";
-    if (domain.contains("github")) return "GitHub";
-    if (domain.contains("medium")) return "Medium";
-    if (domain.contains("twitter") || domain.contains("x.com")) return "X";
-    return domain;
-  }
-
-  Future<void> saveLink(WidgetRef ref) async {
-    final isar = await ref.read(isarProvider.future);
-    final selectedTag = ref.read(selectedTagProvider);
-
-    final url = linkController.text.trim();
-
-    if (url.isEmpty) return;
-
-    // 🔥 FETCH METADATA
-    final data = await MetadataFetch.extract(url);
-
-    final uri = Uri.tryParse(url);
-    final domain = uri?.host ?? "";
-
-    final link = LinkModel()
-      ..url = url
-      // ✅ TITLE (priority: user > metadata > url)
-      ..title = titleController.text.isNotEmpty
-          ? titleController.text
-          : (data?.title ?? url)
-      // ✅ METADATA
-      ..description = data?.description
-      ..thumbnail = data?.image
-      ..siteName = getSiteName(domain)
-      ..domain = domain
-      // ✅ FAVICON (always generate)
-      ..favicon = "https://www.google.com/s2/favicons?domain=$domain"
-      // ✅ USER NOTES (separate field)
-      ..notes = notesController.text;
-
-    await isar.writeTxn(() async {
-      await isar.linkModels.put(link);
-
-      if (selectedTag != null) {
-        link.tags.add(selectedTag);
-        await link.tags.save();
-      }
-    });
-
-    // 🧾 DEBUG
-    debugPrint("------ LINK SAVED ------");
-    debugPrint("Title: ${link.title}");
-    debugPrint("Domain: ${link.domain}");
-    debugPrint("Description: ${link.description}");
-    debugPrint("Notes: ${link.notes}");
-    debugPrint("Thumbnail: ${link.thumbnail}");
-    debugPrint("Favicon: ${link.favicon}");
-    debugPrint("-----------------------");
-
-    // 🧹 CLEANUP
-    linkController.clear();
-    titleController.clear();
-    notesController.clear();
-    ref.read(selectedTagProvider.notifier).state = null;
-  }
-
-  final selectedTagProvider = StateProvider<TagModel?>((ref) => null);
-
-  void openSaveSheet(BuildContext context) {
-    showModalBottomSheet(
+  static Future<void> openSaveSheet(
+    BuildContext context, {
+    ValueChanged<double>? onSheetTopY,
+    ValueChanged<Animation<double>>? onSheetAnimation,
+  }) {
+    return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.35,
-          minChildSize: 0.25,
-          maxChildSize: 0.85,
-          builder: (context, controller) {
-            final c = context.colors;
+      builder: (_) => _SaveLinkSheet(
+        onSheetTopY: onSheetTopY,
+        onSheetAnimation: onSheetAnimation,
+      ),
+    );
+  }
 
-            return Container(
-              decoration: BoxDecoration(
-                color: c.surface,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 30,
-                    spreadRadius: 5,
-                  ),
-                ],
+  // Legacy instance method kept for backward-compat
+  void openSaveSheet2(BuildContext context) => ReWid.openSaveSheet(context);
+}
+
+// ── Sheet widget ──────────────────────────────────────────────────────────────
+
+class _SaveLinkSheet extends ConsumerStatefulWidget {
+  final ValueChanged<double>? onSheetTopY;
+  final ValueChanged<Animation<double>>? onSheetAnimation;
+  const _SaveLinkSheet({this.onSheetTopY, this.onSheetAnimation});
+
+  @override
+  ConsumerState<_SaveLinkSheet> createState() => _SaveLinkSheetState();
+}
+
+class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
+  final _urlCtrl = TextEditingController();
+  final _titleCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
+  final _urlFocus = FocusNode();
+
+  bool _fetchingMeta = false;
+  bool _saving = false;
+  Metadata? _meta;
+  String? _domain;
+  TagModel? _selectedTag;
+  FolderModel? _selectedFolder;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.onSheetTopY != null || widget.onSheetAnimation != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        // box.size.height is the sheet's natural height — stable across animation
+        final box = context.findRenderObject() as RenderBox?;
+        if (box != null && widget.onSheetTopY != null) {
+          final screenH = MediaQuery.of(context).size.height;
+          widget.onSheetTopY!.call(screenH - box.size.height);
+        }
+        // Pass the raw route animation so the parent can track the sheet edge
+        final anim = ModalRoute.of(context)?.animation;
+        if (anim != null) widget.onSheetAnimation?.call(anim);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    _titleCtrl.dispose();
+    _notesCtrl.dispose();
+    _urlFocus.dispose();
+    super.dispose();
+  }
+
+  // ── Metadata fetch ─────────────────────────────────────────────────────────
+
+  Future<void> _fetchMeta(String raw) async {
+    final url = raw.trim();
+    final isValid = url.startsWith('http://') || url.startsWith('https://');
+    if (!isValid) return;
+
+    setState(() {
+      _fetchingMeta = true;
+      _meta = null;
+    });
+
+    try {
+      final data = await MetadataFetch.extract(url);
+      final uri = Uri.tryParse(url);
+      if (!mounted) return;
+      setState(() {
+        _meta = data;
+        _domain = uri?.host ?? '';
+        if (_titleCtrl.text.isEmpty && data?.title != null) {
+          _titleCtrl.text = data!.title!;
+        }
+        _fetchingMeta = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _fetchingMeta = false);
+    }
+  }
+
+  // ── Save ───────────────────────────────────────────────────────────────────
+
+  Future<void> _save() async {
+    final url = _urlCtrl.text.trim();
+    if (url.isEmpty) return;
+
+    setState(() => _saving = true);
+    try {
+      final isar = await ref.read(isarProvider.future);
+      final uri = Uri.tryParse(url);
+      final domain = uri?.host ?? '';
+
+      final link = LinkModel()
+        ..url = url
+        ..title = _titleCtrl.text.isNotEmpty
+            ? _titleCtrl.text
+            : (_meta?.title ?? url)
+        ..description = _meta?.description
+        ..thumbnail = _meta?.image
+        ..siteName = _siteName(domain)
+        ..domain = domain
+        ..favicon = 'https://www.google.com/s2/favicons?domain=$domain&sz=64'
+        ..notes = _notesCtrl.text.trim();
+
+      await isar.writeTxn(() async {
+        await isar.linkModels.put(link);
+        if (_selectedTag != null) {
+          link.tags.add(_selectedTag!);
+          await link.tags.save();
+        }
+        if (_selectedFolder != null) {
+          link.folder.value = _selectedFolder;
+          await link.folder.save();
+        }
+      });
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  String _siteName(String domain) {
+    if (domain.contains('youtube')) return 'YouTube';
+    if (domain.contains('instagram')) return 'Instagram';
+    if (domain.contains('github')) return 'GitHub';
+    if (domain.contains('medium')) return 'Medium';
+    if (domain.contains('twitter') || domain.contains('x.com')) return 'X';
+    return domain;
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final theme = Theme.of(context).textTheme;
+    final kb = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: c.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + kb),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Handle ──────────────────────────────────
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: c.borderSoft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
+            ),
 
-              child: ListView(
-                controller: controller,
-                padding: EdgeInsets.all(16),
+            const SizedBox(height: 18),
 
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: c.borderSoft,
-                        borderRadius: BorderRadius.circular(10),
+            // ── Title row ───────────────────────────────
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.brandGradient,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.bookmark_add_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'SAVE LINK',
+                      style: theme.titleMedium!.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.5,
+                        color: c.textPrimary,
                       ),
                     ),
-                  ),
-
-                  SizedBox(height: 16),
-
-                  Text(
-                    "SAVE LINK",
-                    style: AppTypography.h3.copyWith(
-                      color: c.accent,
-                      letterSpacing: 2.9,
-                      fontWeight: FontWeight.w500,
+                    Text(
+                      'Add to your knowledge vault',
+                      style: theme.bodySmall!
+                          .copyWith(color: c.textHint, fontSize: 11),
                     ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // ── URL Field ────────────────────────────────
+            _SectionLabel(label: 'URL', c: c, theme: theme),
+            const SizedBox(height: 6),
+            _UrlField(
+              controller: _urlCtrl,
+              focus: _urlFocus,
+              c: c,
+              theme: theme,
+              isLoading: _fetchingMeta,
+              onChanged: (v) {
+                if (v.trim().startsWith('http')) _fetchMeta(v);
+              },
+              onClear: () {
+                setState(() {
+                  _urlCtrl.clear();
+                  _titleCtrl.clear();
+                  _meta = null;
+                  _domain = null;
+                });
+              },
+            ),
+
+            // ── Preview card ─────────────────────────────
+            AnimatedSize(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              child: (_meta != null || _fetchingMeta)
+                  ? _PreviewCard(
+                      meta: _meta,
+                      domain: _domain,
+                      isLoading: _fetchingMeta,
+                      c: c,
+                      theme: theme,
+                    )
+                  : const SizedBox.shrink(),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Title Field ──────────────────────────────
+            _SectionLabel(label: 'TITLE', c: c, theme: theme),
+            const SizedBox(height: 6),
+            _StyledField(
+              controller: _titleCtrl,
+              hint: 'Link title (auto-filled)',
+              icon: Icons.title_rounded,
+              c: c,
+              theme: theme,
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Category ────────────────────────────────
+            _SectionLabel(label: 'CATEGORY', c: c, theme: theme),
+            const SizedBox(height: 8),
+            _CategoryRow(
+              c: c,
+              theme: theme,
+              selectedTag: _selectedTag,
+              onSelect: (tag) => setState(() => _selectedTag = tag),
+              ref: ref,
+            ),
+
+            const SizedBox(height: 16),
+
+            const SizedBox(height: 16),
+
+            // ── Collection ───────────────────────────────
+            _SectionLabel(label: 'COLLECTION', c: c, theme: theme),
+            const SizedBox(height: 8),
+            _FolderRow(
+              c: c,
+              theme: theme,
+              selectedFolder: _selectedFolder,
+              onSelect: (f) => setState(() => _selectedFolder = f),
+              ref: ref,
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Notes ────────────────────────────────────
+            _SectionLabel(label: 'NOTES', c: c, theme: theme),
+            const SizedBox(height: 6),
+            _StyledField(
+              controller: _notesCtrl,
+              hint: 'Why is this worth saving?',
+              icon: Icons.notes_rounded,
+              maxLines: 3,
+              c: c,
+              theme: theme,
+            ),
+
+            const SizedBox(height: 24),
+
+            // ── Save button ──────────────────────────────
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: FilledButton(
+                onPressed: _saving || _urlCtrl.text.trim().isEmpty
+                    ? null
+                    : _save,
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
-
-                  Column(
-                    // mainAxisAlignment: MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextFormField(
-                        controller: linkController,
-                        decoration: InputDecoration(hintText: 'Paste Link'),
-                        onChanged: (value) async {
-                          if (value.startsWith("http")) {
-                            final data = await MetadataFetch.extract(value);
-
-                            if (data != null) {
-                              titleController.text = data.title ?? "";
-                              notesController.text = data.description ?? "";
-                            }
-                          }
-                        },
-                      ),
-
-                      SizedBox(height: 20),
-
-                      Text("Category"),
-                      Consumer(
-                        builder: (context, ref, _) {
-                          final tagAsync = ref.watch(tagListProvider);
-                          final selectedTag = ref.watch(selectedTagProvider);
-
-                          return tagAsync.when(
-                            data: (tags) {
-                              if (tags.isEmpty) {
-                                return Text("No categories found");
-                              }
-
-                              return Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  ...tags.map((tag) {
-                                    final isSelected =
-                                        selectedTag?.id == tag.id;
-                                    return ChoiceChip(
-                                      label: Text(tag.name),
-                                      selected: isSelected,
-                                      onSelected: (_) {
-                                        ref
-                                            .read(selectedTagProvider.notifier)
-                                            .state = isSelected
-                                            ? null
-                                            : tag;
-                                      },
-                                    );
-                                  }),
-                                  ActionChip(
-                                    label: Text("+ Add"),
-                                    onPressed: () async {
-                                      final newTagNameController =
-                                          TextEditingController();
-
-                                      // Use showDialog with the correct context
-                                      final newTagName =
-                                          await showDialog<String>(
-                                            context: context,
-                                            builder: (dialogContext) =>
-                                                AlertDialog(
-                                                  title: Text("New Category"),
-                                                  content: TextField(
-                                                    controller:
-                                                        newTagNameController,
-                                                    autofocus: true,
-                                                    decoration: InputDecoration(
-                                                      hintText: "Category name",
-                                                    ),
-                                                    onSubmitted: (value) =>
-                                                        Navigator.of(
-                                                          dialogContext,
-                                                        ).pop(
-                                                          value,
-                                                        ), // use dialogContext
-                                                  ),
-                                                  actions: [
-                                                    TextButton(
-                                                      onPressed: () {
-                                                        Navigator.of(
-                                                          dialogContext,
-                                                        ).pop(); // safe cancel
-                                                      },
-                                                      child: Text("Cancel"),
-                                                    ),
-                                                    TextButton(
-                                                      onPressed: () {
-                                                        Navigator.of(
-                                                          dialogContext,
-                                                        ).pop(
-                                                          newTagNameController
-                                                              .text,
-                                                        ); // safe add
-                                                      },
-                                                      child: Text("Add"),
-                                                    ),
-                                                  ],
-                                                ),
-                                          );
-
-                                      // If user added a valid name, save it
-                                      if (newTagName != null &&
-                                          newTagName.trim().isNotEmpty) {
-                                        final isar = await ref.read(
-                                          isarProvider.future,
-                                        );
-                                        final newTag = TagModel()
-                                          ..name = newTagName.trim();
-                                        await isar.writeTxn(
-                                          () async =>
-                                              await isar.tagModels.put(newTag),
-                                        );
-                                        ref.invalidate(
-                                          tagListProvider,
-                                        ); // refresh chips
-                                      }
-                                    },
-                                  ),
-                                ],
-                              );
-                            },
-                            loading: () => CircularProgressIndicator(),
-                            error: (e, _) => Text("Error: $e"),
-                          );
-                        },
-                      ),
-
-                      TextFormField(
-                        controller: notesController,
-                        maxLines: 3,
-                        decoration: InputDecoration(
-                          hintText: "Why is this resource important?",
+                ),
+                child: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : Text(
+                        'Save to Vault',
+                        style: theme.titleSmall!.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
                         ),
                       ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-                      Ui.gap(12),
+// ── URL Field ─────────────────────────────────────────────────────────────────
 
-                      Consumer(
-                        builder: (context, ref, _) {
-                          return ElevatedButton(
-                            onPressed: () async {
-                              await saveLink(ref);
+class _UrlField extends StatefulWidget {
+  final TextEditingController controller;
+  final FocusNode focus;
+  final AppColorScheme c;
+  final TextTheme theme;
+  final bool isLoading;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
 
-                              Navigator.pop(context); // optional: close sheet
-                            },
-                            child: Text("Save"),
-                          );
-                        },
+  const _UrlField({
+    required this.controller,
+    required this.focus,
+    required this.c,
+    required this.theme,
+    required this.isLoading,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  @override
+  State<_UrlField> createState() => _UrlFieldState();
+}
+
+class _UrlFieldState extends State<_UrlField> {
+  @override
+  void initState() {
+    super.initState();
+    widget.focus.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() => setState(() {});
+
+  @override
+  void dispose() {
+    widget.focus.removeListener(_onFocusChange);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    final theme = widget.theme;
+    final isFocused = widget.focus.hasFocus;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isFocused ? c.accent : c.border,
+          width: isFocused ? 1.0 : 0.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 12),
+          Icon(Icons.link_rounded, size: 18,
+              color: isFocused ? c.accent : c.textHint),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: widget.controller,
+              focusNode: widget.focus,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              style: theme.bodyMedium!.copyWith(color: c.textPrimary),
+              decoration: InputDecoration(
+                hintText: 'https://',
+                hintStyle: theme.bodyMedium!.copyWith(color: c.textHint),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 13),
+              ),
+              onChanged: widget.onChanged,
+            ),
+          ),
+          if (widget.isLoading)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: c.accent),
+              ),
+            )
+          else if (widget.controller.text.isNotEmpty)
+            GestureDetector(
+              onTap: widget.onClear,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Icon(Icons.close_rounded, size: 16, color: c.textHint),
+              ),
+            )
+          else
+            GestureDetector(
+              onTap: () async {
+                final data = await Clipboard.getData(Clipboard.kTextPlain);
+                if (data?.text != null) {
+                  widget.controller.text = data!.text!;
+                  widget.onChanged(data.text!);
+                }
+              },
+              child: Container(
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: c.accentDim,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: c.accentBorder, width: 0.5),
+                ),
+                child: Text(
+                  'Paste',
+                  style: theme.labelSmall!.copyWith(
+                    color: c.accent,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Preview Card ─────────────────────────────────────────────────────────────
+
+class _PreviewCard extends StatelessWidget {
+  final Metadata? meta;
+  final String? domain;
+  final bool isLoading;
+  final AppColorScheme c;
+  final TextTheme theme;
+
+  const _PreviewCard({
+    required this.meta,
+    required this.domain,
+    required this.isLoading,
+    required this.c,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: c.surfaceElevated,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: c.border, width: 0.5),
+        ),
+        child: isLoading
+            ? Row(
+                children: [
+                  _Bone(width: 32, height: 32, radius: 8, c: c),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _Bone(
+                            width: double.infinity,
+                            height: 11,
+                            radius: 4,
+                            c: c),
+                        const SizedBox(height: 6),
+                        _Bone(width: 100, height: 9, radius: 4, c: c),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: c.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: c.border, width: 0.5),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(7),
+                      child: Image.network(
+                        'https://www.google.com/s2/favicons?domain=$domain&sz=64',
+                        width: 32,
+                        height: 32,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, e, s) => Icon(
+                          Icons.language_rounded,
+                          size: 16,
+                          color: c.textHint,
+                        ),
                       ),
-                    ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          meta?.title ?? domain ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.labelMedium!.copyWith(
+                            color: c.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (domain != null && domain!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            domain!,
+                            style: theme.labelSmall!
+                                .copyWith(color: c.textHint),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: c.accentDim,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(Icons.check_rounded,
+                        size: 12, color: c.accent),
                   ),
                 ],
               ),
-            );
-          },
+      ),
+    );
+  }
+}
+
+// ── Category Row ──────────────────────────────────────────────────────────────
+
+class _CategoryRow extends StatelessWidget {
+  final AppColorScheme c;
+  final TextTheme theme;
+  final TagModel? selectedTag;
+  final ValueChanged<TagModel?> onSelect;
+  final WidgetRef ref;
+
+  const _CategoryRow({
+    required this.c,
+    required this.theme,
+    required this.selectedTag,
+    required this.onSelect,
+    required this.ref,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tagsAsync = ref.watch(tagListProvider);
+
+    return tagsAsync.when(
+      loading: () => _chipSkeleton(c),
+      error: (e, _) => Text('Error: $e',
+          style: theme.bodySmall!.copyWith(color: c.coral)),
+      data: (tags) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            // "+ New" chip always first
+            _AddChip(c: c, theme: theme, onAdded: (tag) => onSelect(tag),
+                ref: ref),
+            const SizedBox(width: 8),
+            ...tags.map((tag) {
+              final isSelected = selectedTag?.id == tag.id;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => onSelect(isSelected ? null : tag),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: isSelected ? c.accent : c.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isSelected ? c.accent : c.border,
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Text(
+                      tag.name,
+                      style: theme.labelSmall!.copyWith(
+                        color: isSelected ? Colors.white : c.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+            if (tags.isEmpty)
+              Text(
+                'No categories — create one above',
+                style: theme.bodySmall!.copyWith(color: c.textHint),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chipSkeleton(AppColorScheme c) {
+    return Row(
+      children: List.generate(
+        3,
+        (i) => Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: _Bone(width: 70, height: 30, radius: 20, c: c),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Add Chip ──────────────────────────────────────────────────────────────────
+
+class _AddChip extends StatelessWidget {
+  final AppColorScheme c;
+  final TextTheme theme;
+  final ValueChanged<TagModel?> onAdded;
+  final WidgetRef ref;
+
+  const _AddChip({
+    required this.c,
+    required this.theme,
+    required this.onAdded,
+    required this.ref,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        final ctrl = TextEditingController();
+        final name = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('New Category', style: theme.titleSmall),
+            content: TextField(
+              controller: ctrl,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Category name',
+                prefixIcon: Icon(Icons.folder_outlined,
+                    color: c.textHint, size: 18),
+              ),
+              onSubmitted: (v) => Navigator.of(ctx).pop(v),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Cancel')),
+              TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(ctrl.text),
+                  child: const Text('Add')),
+            ],
+          ),
+        );
+
+        if (name != null && name.trim().isNotEmpty) {
+          final isar = await ref.read(isarProvider.future);
+          final newTag = TagModel()..name = name.trim();
+          await isar.writeTxn(
+              () async => await isar.tagModels.put(newTag));
+          ref.invalidate(tagListProvider);
+          onAdded(newTag);
+        }
+      },
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: c.accentDim,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: c.accentBorder, width: 0.5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.add_rounded, size: 13, color: c.accent),
+            const SizedBox(width: 4),
+            Text(
+              'New',
+              style: theme.labelSmall!.copyWith(
+                color: c.accent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Styled Text Field ─────────────────────────────────────────────────────────
+
+class _StyledField extends StatefulWidget {
+  final TextEditingController controller;
+  final String hint;
+  final IconData icon;
+  final int maxLines;
+  final AppColorScheme c;
+  final TextTheme theme;
+
+  const _StyledField({
+    required this.controller,
+    required this.hint,
+    required this.icon,
+    this.maxLines = 1,
+    required this.c,
+    required this.theme,
+  });
+
+  @override
+  State<_StyledField> createState() => _StyledFieldState();
+}
+
+class _StyledFieldState extends State<_StyledField> {
+  late final FocusNode _focus;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus = FocusNode()..addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() => setState(() {});
+
+  @override
+  void dispose() {
+    _focus
+      ..removeListener(_onFocusChange)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    final theme = widget.theme;
+    final isFocused = _focus.hasFocus;
+
+    final isMultiLine = widget.maxLines > 1;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isFocused ? c.accent : c.border,
+          width: isFocused ? 1.0 : 0.5,
+        ),
+      ),
+      child: Row(
+        // center-align for single-line so icon lines up with the text
+        crossAxisAlignment: isMultiLine
+            ? CrossAxisAlignment.start
+            : CrossAxisAlignment.center,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(
+              left: 12,
+              top: isMultiLine ? 13 : 0,
+            ),
+            child: Icon(widget.icon, size: 18,
+                color: isFocused ? c.accent : c.textHint),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: widget.controller,
+              focusNode: _focus,
+              maxLines: widget.maxLines,
+              style: theme.bodyMedium!.copyWith(color: c.textPrimary),
+              decoration: InputDecoration(
+                hintText: widget.hint,
+                hintStyle: theme.bodyMedium!.copyWith(color: c.textHint),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 13),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Section Label ─────────────────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  final AppColorScheme c;
+  final TextTheme theme;
+
+  const _SectionLabel(
+      {required this.label, required this.c, required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: theme.labelSmall!.copyWith(
+        color: c.textHint,
+        letterSpacing: 1.4,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
+// ── Folder Row ────────────────────────────────────────────────────────────────
+
+class _FolderRow extends StatelessWidget {
+  final AppColorScheme c;
+  final TextTheme theme;
+  final FolderModel? selectedFolder;
+  final ValueChanged<FolderModel?> onSelect;
+  final WidgetRef ref;
+
+  const _FolderRow({
+    required this.c,
+    required this.theme,
+    required this.selectedFolder,
+    required this.onSelect,
+    required this.ref,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final foldersAsync = ref.watch(collectionsStreamProvider);
+    return foldersAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (folders) {
+        if (folders.isEmpty) {
+          return Text(
+            'No collections — create one in Profile',
+            style: theme.bodySmall!.copyWith(color: c.textHint),
+          );
+        }
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () => onSelect(null),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: selectedFolder == null ? c.surfaceElevated : c.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: selectedFolder == null ? c.accent : c.border,
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Text(
+                    'None',
+                    style: theme.labelSmall!.copyWith(
+                      color: selectedFolder == null ? c.accent : c.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ...folders.map((folder) {
+                final isSelected = selectedFolder?.id == folder.id;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => onSelect(isSelected ? null : folder),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: isSelected ? c.accent : c.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? c.accent : c.border,
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.folder_rounded,
+                            size: 12,
+                            color: isSelected ? Colors.white : c.textSecondary,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            folder.name,
+                            style: theme.labelSmall!.copyWith(
+                              color: isSelected ? Colors.white : c.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
         );
       },
+    );
+  }
+}
+
+// ── Bone (skeleton) ───────────────────────────────────────────────────────────
+
+class _Bone extends StatelessWidget {
+  final double width, height, radius;
+  final AppColorScheme c;
+
+  const _Bone({
+    required this.width,
+    required this.height,
+    required this.radius,
+    required this.c,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: c.surfaceElevated,
+        borderRadius: BorderRadius.circular(radius),
+      ),
     );
   }
 }

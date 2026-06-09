@@ -1,269 +1,10 @@
-// import 'package:flutter/material.dart';
-// import 'package:flutter_riverpod/flutter_riverpod.dart';
-//
-// import '../../../data/models/Tag/tag_model.dart';
-// import '../../../theme/controller/theme_controller.dart';
-// import '../../../theme/recallr_colors.dart';
-// import '../../../theme/ui_helpers.dart';
-// import '../category/tag_list_provider.dart';
-
-//
-// class ReCategory extends ConsumerWidget {
-//   const ReCategory({super.key});
-//
-//   @override
-//   Widget build(BuildContext context, WidgetRef ref) {
-//     IconData getIcon(String? name) {
-//       switch (name) {
-//         case "code":
-//           return Icons.code;
-//         case "study":
-//           return Icons.school;
-//         case "design":
-//           return Icons.design_services;
-//         default:
-//           return Icons.folder;
-//       }
-//     }
-//
-//     final c = context.colors;
-//     final txtTheme = Theme
-//         .of(context)
-//         .textTheme;
-//     final themeMode = ref.watch(themeProvider);
-//     final tagsAsync = ref.watch(tagListProvider);
-//
-//     return Scaffold(
-//       appBar: AppBar(title: const Text("Categories")),
-//
-//       body: tagsAsync.when(
-//         data: (tags) {
-//           if (tags.isEmpty) {
-//             return const Center(child: Text("No categories yet"));
-//           }
-//
-//           return Padding(
-//             padding: const EdgeInsets.all(22.0),
-//             child: Column(
-//               crossAxisAlignment: CrossAxisAlignment.start,
-//               children: [
-//                 Text(
-//                   "L I B R A R Y",
-//                   style: txtTheme.titleLarge!.copyWith(
-//                     fontWeight: FontWeight.bold,
-//                     color: c.accent,
-//                   ),
-//                 ),
-//                 Ui.gap8,
-//                 Text(
-//                   "Categories",
-//                   style: txtTheme.displayLarge!.copyWith(
-//                     fontWeight: FontWeight.bold,
-//                     fontSize: 42,
-//                   ),
-//                 ),
-//                 Ui.gap(12),
-//
-//                 Container(
-//                   height: 4,
-//                   width: 110,
-//
-//                   decoration: BoxDecoration(
-//                     color: c.accent,
-//                     borderRadius: BorderRadius.circular(12),
-//                   ),
-//                 ),
-//
-//                 Ui.gap(12),
-//
-//                 Expanded(
-//                   child: ListView.builder(
-//                     itemCount: tags.length,
-//                     itemBuilder: (context, index) {
-//                       final TagModel tag = tags[index];
-//                       final linkCount = tag.links.length;
-//                       final icon = tag.icon != null ? tag.icon! : Icons.folder;
-//
-//                       print(icon);
-//
-//                       return _CategoryCard(
-//                         tag: tag,
-//                         color: c.accent,
-//                         icon: getIcon(tag.icon),
-//                         linkCount: linkCount,
-//                         theme: txtTheme,
-//                         onDelete: () async {
-//                           final confirm = await showDialog(
-//                             context: context, builder: (_) =>
-//                               AlertDialog(
-//                                 title: Text("Delete Category"),
-//                                 content: Text(
-//                                     "Are you sure you want to delete '${tag
-//                                         .name}'? "
-//                                         "All links will remain, but this category will be removed from them."
-//                                 ),
-//                                 actions: [
-//                                   TextButton(
-//                                     onPressed: () =>
-//                                         Navigator.pop(context, false),
-//                                     child: Text("Cancel"),
-//                                   ),
-//                                   TextButton(
-//                                     onPressed: () =>
-//                                         Navigator.pop(context, true),
-//                                     child: Text("Delete",
-//                                         style: TextStyle(color: Colors.red)),
-//                                   ),
-//                                 ],
-//                               ),
-//                           );
-//
-//                           if (confirm == true) {
-//                             final isar = await ref.read(isarProvider.future);
-//
-//                             await isar.writeTxn(() async {
-//                               // Remove this tag from all linked links
-//                               for (final link in tag.links) {
-//                                 link.tags.remove(tag);
-//                                 await link.tags.save();
-//                               }
-//
-//                               // Delete the tag itself
-//                               await isar.tagModels.delete(tag.id);
-//                             });
-//
-//                             // Refresh provider to update UI
-//                             ref.invalidate(tagListProvider);
-//
-//
-//
-//                         },
-//                       );
-//                     },
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           );
-//         },
-//
-//         loading: () => const Center(child: CircularProgressIndicator()),
-//
-//         error: (e, _) {
-//           print(e.toString());
-//
-//           return Center(child: Text(e.toString()));
-//         },
-//       ),
-//     );
-//   }
-// }
-//
-// class _CategoryCard extends StatelessWidget {
-//   final TagModel tag;
-//   final Color color;
-//   final IconData icon;
-//   final TextTheme? theme;
-//   final VoidCallback? onDelete;
-//   final int linkCount;
-//
-//   _CategoryCard({
-//     required this.tag,
-//     required this.icon,
-//     required this.color,
-//     this.theme,
-//     this.onDelete,
-//     required this.linkCount,
-//   });
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     final c = context.colors;
-//
-//     return Container(
-//       margin: const EdgeInsets.only(bottom: 16),
-//       padding: const EdgeInsets.all(20),
-//       decoration: BoxDecoration(
-//         color: c.surface,
-//         borderRadius: BorderRadius.circular(8),
-//         border: Border.all(color: c.border),
-//       ),
-//       child: Column(
-//         crossAxisAlignment: CrossAxisAlignment.start,
-//         children: [
-//           Container(
-//             padding: EdgeInsets.all(8),
-//             decoration: BoxDecoration(
-//               color: color.withOpacity(.15),
-//               borderRadius: BorderRadius.circular(10),
-//             ),
-//             child: Icon(icon, color: color, size: 22),
-//           ),
-//
-//           Ui.gap(20),
-//
-//           /// Top Row
-//           Row(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               // const SizedBox(width: 14),
-//
-//               /// Title + description
-//               Expanded(
-//                 child: Column(
-//                   crossAxisAlignment: CrossAxisAlignment.start,
-//                   mainAxisAlignment: MainAxisAlignment.start,
-//                   children: [
-//                     Text(
-//                       tag.name,
-//                       style: Theme
-//                           .of(context)
-//                           .textTheme
-//                           .titleLarge,
-//                     ),
-//
-//                     Ui.gap8,
-//                   ],
-//                 ),
-//               ),
-//             ],
-//           ),
-//
-//           const SizedBox(height: 14),
-//
-//           Row(
-//             children: [
-//               Container(
-//                 padding: const EdgeInsets.symmetric(
-//                   horizontal: 10,
-//                   vertical: 4,
-//                 ),
-//
-//                 child: Text(
-//                   "$linkCount items",
-//                   style: theme?.labelLarge!.copyWith(color: c.textSecondary),
-//                 ),
-//               ),
-//
-//               const Spacer(),
-//
-//               Icon(Icons.arrow_outward_outlined, size: 32, color: c.accent),
-//             ],
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-// }
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../common/add_category_sheet.dart';
+import '../../../common/sheet_fab.dart';
 import '../../../data/models/Tag/tag_model.dart';
-import '../../../theme/controller/theme_controller.dart';
 import '../../../theme/recallr_colors.dart';
-import '../../../theme/ui_helpers.dart';
-import 'package:go_router/go_router.dart';
 import '../../database/providers/isar_provider.dart';
 import '../category/tag_list_provider.dart';
 
@@ -272,168 +13,369 @@ class ReCategory extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    IconData getIcon(String? name) {
-      switch (name) {
-        case "code":
-          return Icons.code;
-        case "study":
-          return Icons.school;
-        case "design":
-          return Icons.design_services;
-        default:
-          return Icons.folder;
-      }
-    }
-
     final c = context.colors;
-    final txtTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context).textTheme;
     final tagsAsync = ref.watch(tagListProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text("Categories")),
-
-      body: tagsAsync.when(
-        data: (tags) {
-          if (tags.isEmpty) {
-            return const Center(child: Text("No categories yet"));
-          }
-
-          return Padding(
-            padding: const EdgeInsets.all(22.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "L I B R A R Y",
-                  style: txtTheme.titleLarge!.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: c.accent,
-                  ),
-                ),
-                Ui.gap8,
-                Text(
-                  "Categories",
-                  style: txtTheme.displayLarge!.copyWith(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 42,
-                  ),
-                ),
-                Ui.gap(12),
-                Container(
-                  height: 4,
-                  width: 110,
-                  decoration: BoxDecoration(
-                    color: c.accent,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                Ui.gap(12),
-
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: tags.length,
-                    itemBuilder: (context, index) {
-                      final TagModel tag = tags[index];
-                      final linkCount = tag.links.length;
-
-                      return _CategoryCard(
-                        tag: tag,
-                        color: c.accent,
-                        icon: getIcon(tag.icon),
-                        linkCount: linkCount,
-                        theme: txtTheme,
-                        onDelete: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: Text("Delete Category"),
-                              content: Text(
-                                "Are you sure you want to delete '${tag.name}'?  "
-                                    "All links will remain, but this category will be removed from them.",
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => context.pop(false),
-                                  child: Text("Cancel"),
-                                ),
-                                TextButton(
-                                  onPressed: () => context.pop(true),
-                                  child: Text(
-                                    "Delete",
-                                    style: TextStyle(color: Colors.red),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-
-                          if (confirm == true) {
-                            final messenger = ScaffoldMessenger.of(context);
-                            final tagName = tag.name;
-
-                            final isar = await ref.read(isarProvider.future);
-
-                            await isar.writeTxn(() async {
-                              for (final link in tag.links) {
-                                link.tags.remove(tag);
-                                await link.tags.save();
-                              }
-                              await isar.tagModels.delete(tag.id);
-                            });
-
-                            // Refresh provider to update UI
-                            ref.invalidate(tagListProvider);
-
-                            messenger.showSnackBar(
-                              SnackBar(content: Text("'$tagName' deleted !")),
-                            );
-                          }
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
+    return SheetFabHost(
+      heroTag: 'category_fab',
+      openSheet: (ctx, {required onSheetTopY, required onSheetAnimation}) =>
+          showModalBottomSheet<void>(
+            context: ctx,
+            isScrollControlled: true,
+            builder: (_) => AddCategorySheet(
+              onSheetTopY: onSheetTopY,
+              onSheetAnimation: onSheetAnimation,
             ),
-          );
-        },
-
-        loading: () => const Center(child: CircularProgressIndicator()),
-
-        error: (e, _) => Center(child: Text(e.toString())),
+          ),
+      child: Scaffold(
+        backgroundColor: c.background,
+        appBar: AppBar(
+          backgroundColor: c.background,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          title: Text('CATEGORIES', style: theme.headlineLarge),
+        ),
+        body: tagsAsync.when(
+          data: (tags) => _Body(tags: tags, c: c, theme: theme, ref: ref),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(
+            child: Text(e.toString(),
+                style: theme.bodyMedium!.copyWith(color: c.coral)),
+          ),
+        ),
       ),
     );
   }
 }
 
-class _CategoryCard extends StatelessWidget {
-  final TagModel tag;
-  final Color color;
-  final IconData icon;
-  final TextTheme? theme;
-  final VoidCallback? onDelete;
-  final int linkCount;
+// ── Body ─────────────────────────────────────────────────────────────────────
 
-  _CategoryCard({
-    required this.tag,
-    required this.icon,
-    required this.color,
-    this.theme,
-    this.onDelete,
-    required this.linkCount,
+class _Body extends StatelessWidget {
+  final List<TagModel> tags;
+  final AppColorScheme c;
+  final TextTheme theme;
+  final WidgetRef ref;
+
+  const _Body({
+    required this.tags,
+    required this.c,
+    required this.theme,
+    required this.ref,
   });
 
   @override
   Widget build(BuildContext context) {
+    return CustomScrollView(
+      slivers: [
+        // ── Header ──────────────────────────────────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: c.border, width: 0.5),
+                    borderRadius: BorderRadius.circular(20),
+                    color: c.surfaceElevated,
+                  ),
+                  child: Text(
+                    'L I B R A R Y',
+                    style: theme.labelSmall!.copyWith(
+                      color: c.accent,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.8,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Categories',
+                      style: theme.displayLarge!.copyWith(
+                        fontSize: 38,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: c.accentDim,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${tags.length}',
+                          style: theme.labelMedium!.copyWith(
+                            color: c.accent,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ── Empty state ──────────────────────────────────
+        if (tags.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _EmptyState(c: c, theme: theme, context: context),
+          ),
+
+        // ── Category grid ────────────────────────────────
+        if (tags.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+            sliver: SliverGrid(
+              delegate: SliverChildBuilderDelegate(
+                (ctx, index) {
+                  final tag = tags[index];
+                  return _CategoryCard(
+                    tag: tag,
+                    c: c,
+                    theme: theme,
+                    onDelete: () => _confirmDelete(ctx, ref, tag),
+                  );
+                },
+                childCount: tags.length,
+              ),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.05,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _confirmDelete(
+      BuildContext context, WidgetRef ref, TagModel tag) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Category'),
+        content: Text(
+          "Delete '${tag.name}'? Links won't be affected.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Delete',
+                style: TextStyle(color: context.colors.coral)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      if (!context.mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      final isar = await ref.read(isarProvider.future);
+      await isar.writeTxn(() async {
+        for (final link in tag.links) {
+          link.tags.remove(tag);
+          await link.tags.save();
+        }
+        await isar.tagModels.delete(tag.id);
+      });
+      ref.invalidate(tagListProvider);
+      messenger.showSnackBar(
+        SnackBar(content: Text("'${tag.name}' deleted")),
+      );
+    }
+  }
+}
+
+// ── Empty State ───────────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  final AppColorScheme c;
+  final TextTheme theme;
+  final BuildContext context;
+
+  const _EmptyState({
+    required this.c,
+    required this.theme,
+    required this.context,
+  });
+
+  @override
+  Widget build(BuildContext ctx) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Illustration container
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: c.surfaceElevated,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: c.border, width: 0.5),
+            ),
+            child: Icon(
+              Icons.folder_open_rounded,
+              size: 36,
+              color: c.accent,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          Text(
+            'No categories yet',
+            style: theme.titleMedium!.copyWith(
+              fontWeight: FontWeight.w700,
+              color: c.textPrimary,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            'Create categories to organise your saved\nlinks by topic, project, or interest.',
+            textAlign: TextAlign.center,
+            style: theme.bodySmall!.copyWith(
+              color: c.textHint,
+              height: 1.5,
+            ),
+          ),
+
+          const SizedBox(height: 28),
+
+          // Suggested categories chips
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: const [
+              _SuggestionChip(label: '🖥  Dev'),
+              _SuggestionChip(label: '🎨  Design'),
+              _SuggestionChip(label: '📚  Reading'),
+              _SuggestionChip(label: '🔬  Research'),
+              _SuggestionChip(label: '💡  Ideas'),
+            ],
+          ),
+
+          const SizedBox(height: 28),
+
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => const AddCategorySheet(),
+              ),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Create your first category'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SuggestionChip extends StatelessWidget {
+  final String label;
+  const _SuggestionChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
     final c = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: c.surfaceElevated,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.border, width: 0.5),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall!.copyWith(
+              color: c.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+      ),
+    );
+  }
+}
+
+// ── Category Card ─────────────────────────────────────────────────────────────
+
+class _CategoryCard extends StatelessWidget {
+  final TagModel tag;
+  final AppColorScheme c;
+  final TextTheme theme;
+  final VoidCallback onDelete;
+
+  const _CategoryCard({
+    required this.tag,
+    required this.c,
+    required this.theme,
+    required this.onDelete,
+  });
+
+  static const _iconMap = {
+    'code': Icons.code_rounded,
+    'study': Icons.school_rounded,
+    'design': Icons.design_services_rounded,
+    'book': Icons.menu_book_rounded,
+    'work': Icons.work_rounded,
+    'star': Icons.star_rounded,
+    'idea': Icons.lightbulb_rounded,
+  };
+
+  static const _colorMap = {
+    0: AppColors.cyan,
+    1: AppColors.purple,
+    2: AppColors.green,
+    3: AppColors.amber,
+    4: AppColors.coral,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = _iconMap[tag.icon] ?? Icons.folder_rounded;
+    final color = _colorMap[tag.id % 5] ?? AppColors.cyan;
+    final dimColor = color.withValues(alpha: 0.12);
+    final linkCount = tag.links.length;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border, width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -441,47 +383,55 @@ class _CategoryCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: EdgeInsets.all(8),
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(.15),
+                  color: dimColor,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: color, size: 22),
+                child: Icon(icon, color: color, size: 20),
               ),
-              Spacer(),
-              if (onDelete != null)
-                GestureDetector(
-                  onTap: onDelete,
-                  child: ClipRRect(
-                      borderRadius: BorderRadiusGeometry.circular(15),
-                      child: Icon(Icons.delete, color: c.accent)),
+              const Spacer(),
+              GestureDetector(
+                onTap: onDelete,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: c.surfaceElevated,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: c.border, width: 0.5),
+                  ),
+                  child: Icon(Icons.close_rounded, size: 14, color: c.textHint),
                 ),
+              ),
             ],
           ),
 
-          Ui.gap(20),
+          const Spacer(),
 
           Text(
             tag.name,
-            style: theme?.titleLarge ?? Theme.of(context).textTheme.titleLarge,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.titleSmall!.copyWith(
+              fontWeight: FontWeight.w700,
+              color: c.textPrimary,
+            ),
           ),
 
-          Ui.gap8,
+          const SizedBox(height: 4),
 
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "$linkCount items",
-                style: theme?.labelLarge?.copyWith(color: c.textSecondary),
+                '$linkCount ${linkCount == 1 ? 'link' : 'links'}',
+                style: theme.labelSmall!.copyWith(color: c.textHint),
               ),
-              Icon(Icons.arrow_outward_outlined, size: 32, color: c.accent),
+              const Spacer(),
+              Icon(Icons.arrow_outward_rounded, size: 14, color: color),
             ],
           ),
-
-          
-
-
         ],
       ),
     );

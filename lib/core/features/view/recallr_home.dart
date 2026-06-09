@@ -36,7 +36,7 @@
 //         ],
 //       ),
 //       floatingActionButton: FloatingActionButton(
-//         onPressed: () => ReWid().openSaveSheet(context),
+//         onPressed: () => ReWid.openSaveSheet(context),
 //         child: Icon(Icons.add),
 //       ),
 //       body: Padding(
@@ -466,6 +466,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:recallr/common/sheet_fab.dart';
 import 'package:recallr/common/widgets.dart';
 import '../../../theme/controller/theme_controller.dart';
 import '../../../theme/recallr_colors.dart';
@@ -474,6 +475,10 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../repositrories/link_providers/recent_links_provider.dart';
+import '../../repositrories/link_providers/link_repository_provider.dart';
+import '../category/tag_list_provider.dart';
+
+final _discoverDismissedProvider = StateProvider<bool>((ref) => false);
 
 class RecallrHome extends ConsumerWidget {
   const RecallrHome({super.key});
@@ -484,7 +489,15 @@ class RecallrHome extends ConsumerWidget {
     final theme = Theme.of(context).textTheme;
     final themeMode = ref.watch(themeProvider);
 
-    return Scaffold(
+    return SheetFabHost(
+      heroTag: 'home_fab',
+      openSheet: (ctx, {required onSheetTopY, required onSheetAnimation}) =>
+          ReWid.openSaveSheet(
+            ctx,
+            onSheetTopY: onSheetTopY,
+            onSheetAnimation: onSheetAnimation,
+          ),
+      child: Scaffold(
       backgroundColor: c.background,
       appBar: AppBar(
         backgroundColor: c.background,
@@ -516,10 +529,6 @@ class RecallrHome extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => ReWid().openSaveSheet(context),
-        child: const Icon(Icons.add),
-      ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
@@ -530,7 +539,25 @@ class RecallrHome extends ConsumerWidget {
             // ── Hero header ──────────────────────────────────────
             _HeroHeader(c: c, theme: theme),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
+
+            // ── Discover Mode card ───────────────────────────────
+            Consumer(
+              builder: (context, ref, _) {
+                final dismissed = ref.watch(_discoverDismissedProvider);
+                if (dismissed) return const SizedBox.shrink();
+                final discoverAsync = ref.watch(discoverLinkProvider);
+                return discoverAsync.maybeWhen(
+                  data: (link) {
+                    if (link == null) return const SizedBox.shrink();
+                    return _DiscoverCard(link: link, c: c, theme: theme);
+                  },
+                  orElse: () => const SizedBox.shrink(),
+                );
+              },
+            ),
+
+            const SizedBox(height: 8),
 
             // ── Section header ───────────────────────────────────
             Row(
@@ -591,7 +618,7 @@ class RecallrHome extends ConsumerWidget {
                     return Expanded(
                       child: ListView.separated(
                         itemCount: links.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        separatorBuilder: (ctx, i) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           final link = links[index];
                           return _LinkCard(link: link, c: c, theme: theme);
@@ -602,8 +629,8 @@ class RecallrHome extends ConsumerWidget {
                   loading: () => Expanded(
                     child: ListView.separated(
                       itemCount: 4,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (_, __) => _SkeletonCard(c: c),
+                      separatorBuilder: (ctx, i) => const SizedBox(height: 10),
+                      itemBuilder: (_, i) => _SkeletonCard(c: c),
                     ),
                   ),
                   error: (e, _) =>
@@ -614,20 +641,160 @@ class RecallrHome extends ConsumerWidget {
           ],
         ),
       ),
+      ),
+    );
+  }
+}
+
+// ── Discover Card ────────────────────────────────────────────────────────────
+
+class _DiscoverCard extends ConsumerWidget {
+  final dynamic link;
+  final dynamic c;
+  final TextTheme theme;
+
+  const _DiscoverCard({required this.link, required this.c, required this.theme});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            c.accent.withValues(alpha: 0.08),
+            c.purple.withValues(alpha: 0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.accentBorder, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: c.accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.auto_awesome_rounded, size: 10, color: c.accent),
+                    const SizedBox(width: 4),
+                    Text(
+                      'REMEMBER THIS?',
+                      style: theme.labelSmall!.copyWith(
+                        color: c.accent,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 9,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => ref.read(_discoverDismissedProvider.notifier).state = true,
+                child: Icon(Icons.close_rounded, size: 16, color: c.textHint),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (link.favicon != null)
+                Container(
+                  width: 28,
+                  height: 28,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    color: c.surfaceElevated,
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.network(
+                      link.favicon,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          Icon(Icons.link, size: 14, color: c.textHint),
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: Text(
+                  link.title ?? '',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.titleSmall!.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: c.textPrimary,
+                    height: 1.3,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            link.domain ?? '',
+            style: theme.bodySmall!.copyWith(color: c.textHint, fontSize: 11),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final url = link.url as String;
+                    final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    ref.read(linkRepositoryProvider).updateLastOpened(link.id as int);
+                    ref.read(_discoverDismissedProvider.notifier).state = true;
+                  },
+                  icon: Icon(Icons.open_in_new_rounded, size: 14, color: c.accent),
+                  label: Text('Open', style: TextStyle(color: c.accent, fontSize: 13)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    side: BorderSide(color: c.accentBorder, width: 0.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
 
 // ── Hero Header ─────────────────────────────────────────────────────────────
 
-class _HeroHeader extends StatelessWidget {
+class _HeroHeader extends ConsumerWidget {
   final dynamic c;
   final TextTheme theme;
 
   const _HeroHeader({required this.c, required this.theme});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final totalLinks = ref.watch(totalLinksCountProvider);
+    final thisWeekLinks = ref.watch(thisWeekLinksCountProvider);
+    final tags = ref.watch(tagListProvider);
+
+    final savedValue = totalLinks.maybeWhen(data: (n) => '$n', orElse: () => '—');
+    final tagsValue = tags.maybeWhen(data: (t) => '${t.length}', orElse: () => '—');
+    final weekValue = thisWeekLinks.maybeWhen(data: (n) => '$n', orElse: () => '—');
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -691,11 +858,11 @@ class _HeroHeader extends StatelessWidget {
           ),
           child: Row(
             children: [
-              _StatItem(label: 'Saved', value: '—', c: c, theme: theme),
+              _StatItem(label: 'Saved', value: savedValue, c: c, theme: theme),
               _Divider(c: c),
-              _StatItem(label: 'Tags', value: '—', c: c, theme: theme),
+              _StatItem(label: 'Tags', value: tagsValue, c: c, theme: theme),
               _Divider(c: c),
-              _StatItem(label: 'This week', value: '—', c: c, theme: theme),
+              _StatItem(label: 'This week', value: weekValue, c: c, theme: theme),
             ],
           ),
         ),
@@ -774,13 +941,13 @@ class _LinkCard extends StatelessWidget {
           final rawUrl = link.url;
 
           if (rawUrl == null || rawUrl.isEmpty) {
+            if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Invalid URL")),
             );
             return;
           }
 
-          // ✅ Ensure proper scheme
           final uri = Uri.parse(
             rawUrl.startsWith('http') ? rawUrl : 'https://$rawUrl',
           );
@@ -791,10 +958,9 @@ class _LinkCard extends StatelessWidget {
               mode: LaunchMode.externalApplication,
             );
 
-            if (!success) {
-              throw 'Could not launch';
-            }
+            if (!success) throw 'Could not launch';
           } catch (e) {
+            if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Cannot open the link")),
             );
@@ -835,7 +1001,7 @@ class _LinkCard extends StatelessWidget {
                           height: 34,
                           width: 34,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Icon(
+                          errorBuilder: (_, e, s) => Icon(
                             Icons.link_rounded,
                             color: c.textHint,
                             size: 16,
@@ -969,7 +1135,7 @@ class _LinkCard extends StatelessWidget {
                       height: 64,
                       width: 64,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox(),
+                      errorBuilder: (_, e, s) => const SizedBox(),
                     ),
                   ),
                 ],
@@ -1110,6 +1276,8 @@ class _SkeletonCard extends StatelessWidget {
     );
   }
 }
+
+// ── Bone (skeleton) ───────────────────────────────────────────────────────────
 
 class _Bone extends StatelessWidget {
   final double width, height, radius;

@@ -7,6 +7,7 @@ import '../../../common/all_links_wid.dart';
 import '../../../common/chips_filter.dart';
 import '../../../data/models/search/search_model.dart';
 import '../../../theme/recallr_colors.dart';
+import '../../repositrories/link_providers/link_repository_provider.dart';
 import '../../repositrories/search/search_provider.dart';
 
 // ── Screen ───────────────────────────────────────────────────────────────────
@@ -257,7 +258,7 @@ class _AllLinksScreenState extends ConsumerState<AllLinksScreen> {
                             link: links[i],
                             c: c,
                             theme: theme,
-                            onTap: () => _launch(context, links[i].url),
+                            onTap: () => _launchAndTrack(context, links[i].url, links[i].id, ref),
                           ),
                         )
                       : ListView.separated(
@@ -269,7 +270,7 @@ class _AllLinksScreenState extends ConsumerState<AllLinksScreen> {
                             link: links[i],
                             c: c,
                             theme: theme,
-                            onTap: () => _launch(context, links[i].url),
+                            onTap: () => _launchAndTrack(context, links[i].url, links[i].id, ref),
                           ),
                         ),
                 ),
@@ -340,22 +341,19 @@ class _AllLinksScreenState extends ConsumerState<AllLinksScreen> {
 
 // ── URL launcher helper ───────────────────────────────────────────────────────
 
-Future<void> _launch(BuildContext context, String? rawUrl) async {
+Future<void> _launchAndTrack(BuildContext context, String? rawUrl, int linkId, WidgetRef ref) async {
   if (rawUrl == null || rawUrl.isEmpty) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Invalid URL')));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid URL')));
     return;
   }
   final uri = Uri.parse(rawUrl.startsWith('http') ? rawUrl : 'https://$rawUrl');
   try {
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok) throw 'Could not launch';
+    ref.read(linkRepositoryProvider).updateLastOpened(linkId);
   } catch (_) {
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Cannot open link')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot open link')));
     }
   }
 }

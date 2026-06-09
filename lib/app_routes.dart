@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'core/features/links/all_links.dart';
 import 'core/features/view/re_addcategory.dart';
 import 'core/features/view/re_category.dart';
+import 'core/features/view/re_collections.dart';
 import 'core/features/view/re_profile.dart';
 import 'core/features/view/re_search.dart';
 import 'core/features/view/recallr_home.dart';
@@ -41,6 +42,12 @@ class ReNav {
             path: '/categories',
             name: 'categories',
             builder: (context, state) => const ReCategory(),
+          ),
+
+          GoRoute(
+            path: '/collections',
+            name: 'collections',
+            builder: (context, state) => const ReCollections(),
           ),
 
           GoRoute(

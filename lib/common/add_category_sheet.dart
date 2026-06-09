@@ -2,16 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/features/category/tag_provider.dart';
+import 'sheet_fab.dart';
 
 
 class AddCategorySheet extends ConsumerStatefulWidget {
-  const AddCategorySheet({super.key});
+  final ValueChanged<double>? onSheetTopY;
+  final ValueChanged<Animation<double>>? onSheetAnimation;
+
+  const AddCategorySheet({
+    super.key,
+    this.onSheetTopY,
+    this.onSheetAnimation,
+  });
 
   @override
   ConsumerState<AddCategorySheet> createState() => _AddCategorySheetState();
 }
 
-class _AddCategorySheetState extends ConsumerState<AddCategorySheet> {
+class _AddCategorySheetState extends ConsumerState<AddCategorySheet>
+    with SheetFabReporter<AddCategorySheet> {
+  @override
+  ValueChanged<double>? get onSheetTopY => widget.onSheetTopY;
+  @override
+  ValueChanged<Animation<double>>? get onSheetAnimation => widget.onSheetAnimation;
   final nameController = TextEditingController();
 
   Color selectedColor = Colors.blue;

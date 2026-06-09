@@ -1,6 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../core/repositrories/link_providers/link_repository_provider.dart';
+import '../core/services/link_health_service.dart';
+
+String readingTimeLabel(String title, String? description) {
+  final text = '$title ${description ?? ''}';
+  final words = text.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+  final minutes = (words / 200).ceil();
+  if (minutes <= 1) return '< 1 min';
+  return '$minutes min';
+}
+
+final _healthProvider = FutureProvider.family<bool?, int>((ref, linkId) async {
+  return LinkHealthService.instance.getCachedStatus(linkId);
+});
 
 void showLinkActions({
   required BuildContext context,
@@ -17,34 +32,47 @@ void showLinkActions({
   );
 }
 
-class _ActionSheet extends StatelessWidget {
+class _ActionSheet extends ConsumerWidget {
   final dynamic link;
   final dynamic c;
 
   const _ActionSheet({required this.link, required this.c});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           _tile(
-            icon: Icons.bookmark_rounded,
+            icon: link.isFavorite
+                ? Icons.bookmark_remove_outlined
+                : Icons.bookmark_rounded,
             label: link.isFavorite ? 'Remove Favorite' : 'Mark Favorite',
-            onTap: () => Navigator.pop(context),
+            onTap: () async {
+              Navigator.pop(context);
+              await ref.read(linkRepositoryProvider).toggleFavorite(link.id);
+            },
           ),
           _tile(
-            icon: Icons.check_circle_outline,
-            label: 'Mark as Read',
-            onTap: () => Navigator.pop(context),
+            icon: link.isRead
+                ? Icons.radio_button_unchecked_rounded
+                : Icons.check_circle_outline,
+            label: link.isRead ? 'Mark as Unread' : 'Mark as Read',
+            onTap: () async {
+              Navigator.pop(context);
+              await ref.read(linkRepositoryProvider).toggleRead(link.id);
+            },
           ),
           _tile(
             icon: Icons.delete_outline,
             label: 'Delete',
             isDanger: true,
-            onTap: () => Navigator.pop(context),
+            onTap: () async {
+              Navigator.pop(context);
+              await ref.read(linkRepositoryProvider).deleteLink(link.id);
+            },
           ),
         ],
       ),
@@ -59,14 +87,13 @@ class _ActionSheet extends StatelessWidget {
   }) {
     return ListTile(
       leading: Icon(icon, color: isDanger ? Colors.red : null),
-      title: Text(label,
-          style: TextStyle(color: isDanger ? Colors.red : null)),
+      title: Text(label, style: TextStyle(color: isDanger ? Colors.red : null)),
       onTap: onTap,
     );
   }
 }
 
-class LinkCard extends StatelessWidget {
+class LinkCard extends ConsumerWidget {
   final dynamic link;
   final dynamic c;
   final TextTheme theme;
@@ -81,7 +108,10 @@ class LinkCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final healthAsync = ref.watch(_healthProvider(link.id as int));
+    final isDead = healthAsync.maybeWhen(data: (v) => v == false, orElse: () => false);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -90,7 +120,10 @@ class LinkCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: c.border, width: 0.5),
+          border: Border.all(
+            color: isDead ? Colors.red.withValues(alpha: 0.4) : c.border,
+            width: isDead ? 1.0 : 0.5,
+          ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -98,14 +131,11 @@ class LinkCard extends StatelessWidget {
             _favicon(),
             const SizedBox(width: 12),
 
-            Expanded(child: _content(context)),
+            Expanded(child: _content(context, isDead)),
 
             const SizedBox(width: 6),
 
-            // ✅ ALWAYS FIXED POSITION
             _moreButton(context),
-
-            // ✅ Thumbnail AFTER actions
             _thumbnail(),
           ],
         ),
@@ -147,11 +177,12 @@ class LinkCard extends StatelessWidget {
     ),
   );
 
-  Widget _content(BuildContext context) {
+  Widget _content(BuildContext context, bool isDead) {
+    final readTime = readingTimeLabel(link.title ?? '', link.description as String?);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Title
         Row(
           children: [
             Expanded(
@@ -165,7 +196,12 @@ class LinkCard extends StatelessWidget {
                 ),
               ),
             ),
-            if (link.isFavorite == true)
+            if (isDead)
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Icon(Icons.wifi_off_rounded, size: 13, color: Colors.red.shade400),
+              )
+            else if (link.isFavorite == true)
               Icon(Icons.bookmark_rounded, size: 14, color: c.accent),
           ],
         ),
@@ -181,12 +217,10 @@ class LinkCard extends StatelessWidget {
 
         Row(
           children: [
-            // 🏷 TAG (no expansion)
             if (link.tags.isNotEmpty)
               Flexible(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: c.accentDim,
                     borderRadius: BorderRadius.circular(5),
@@ -204,20 +238,40 @@ class LinkCard extends StatelessWidget {
                 ),
               ),
 
-            // spacing after tag
             if (link.tags.isNotEmpty) const SizedBox(width: 6),
 
-            // 🔥 THIS IS THE KEY FIX
+            // Reading time badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: c.surfaceElevated,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: c.borderSoft, width: 0.5),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.schedule_rounded, size: 9, color: c.textHint),
+                  const SizedBox(width: 3),
+                  Text(
+                    readTime,
+                    style: theme.labelSmall!.copyWith(
+                      color: c.textHint,
+                      fontSize: 9,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
             const Spacer(),
 
-            // 📅 DATE
             Text(
               DateFormat.MMMd().format(link.createdAt),
               style: theme.bodySmall!.copyWith(color: c.textHint),
             ),
 
             const SizedBox(width: 6),
-
           ],
         )
       ],

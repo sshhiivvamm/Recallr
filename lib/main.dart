@@ -4,7 +4,11 @@ import 'package:recallr/theme/controller/theme_controller.dart';
 import 'package:recallr/theme/recallr_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-void main() {
+import 'core/services/notification_service.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.instance.init();
   runApp(const ProviderScope(child: MyApp()));
 }
 

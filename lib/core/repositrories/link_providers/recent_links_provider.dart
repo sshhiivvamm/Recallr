@@ -2,6 +2,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/Link/link_model.dart';
 import 'link_repository_provider.dart';
 
+final discoverLinkProvider = FutureProvider<LinkModel?>((ref) {
+  final repo = ref.watch(linkRepositoryProvider);
+  return repo.getDiscoverLink();
+});
+
+final readingStreakProvider = FutureProvider<int>((ref) {
+  final repo = ref.watch(linkRepositoryProvider);
+  return repo.getReadingStreak();
+});
+
+final totalLinksCountProvider = StreamProvider<int>((ref) {
+  final repo = ref.watch(linkRepositoryProvider);
+  return repo.watchTotalLinksCount();
+});
+
+final thisWeekLinksCountProvider = StreamProvider<int>((ref) {
+  final repo = ref.watch(linkRepositoryProvider);
+  return repo.watchThisWeekLinksCount();
+});
+
 final recentLinksStreamProvider =
 StreamProvider<List<LinkModel>>((ref) async* {
 
