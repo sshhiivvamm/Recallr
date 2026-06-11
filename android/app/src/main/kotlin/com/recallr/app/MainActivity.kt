@@ -1,4 +1,4 @@
-package com.example.recallr
+package com.recallr.app
 
 import android.content.Intent
 import android.os.Bundle
