@@ -1,3 +1,5 @@
+import 'dart:math' show max;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,8 +15,30 @@ import '../../features/category/tag_list_provider.dart';
 import '../../features/collections/collection_provider.dart';
 import '../../repositrories/link_providers/recent_links_provider.dart';
 
-final _notifEnabledProvider = StateNotifierProvider<_NotifNotifier, bool>(
+final _notifEnabledProvider =
+    StateNotifierProvider<_NotifNotifier, bool>(
   (ref) => _NotifNotifier(),
+);
+
+class _ReminderTimeNotifier extends StateNotifier<TimeOfDay> {
+  _ReminderTimeNotifier() : super(const TimeOfDay(hour: 10, minute: 0)) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final (h, m) = await NotificationService.instance.getReminderTime();
+    state = TimeOfDay(hour: h, minute: m);
+  }
+
+  Future<void> update(int hour, int minute) async {
+    await NotificationService.instance.setReminderTime(hour, minute);
+    state = TimeOfDay(hour: hour, minute: minute);
+  }
+}
+
+final _reminderTimeProvider =
+    StateNotifierProvider<_ReminderTimeNotifier, TimeOfDay>(
+  (ref) => _ReminderTimeNotifier(),
 );
 
 class _NotifNotifier extends StateNotifier<bool> {
@@ -28,7 +52,8 @@ class _NotifNotifier extends StateNotifier<bool> {
 
   Future<void> toggle(bool val) async {
     if (val) {
-      final granted = await NotificationService.instance.requestPermissions();
+      final granted =
+          await NotificationService.instance.requestPermissions();
       if (!granted) return;
     }
     await NotificationService.instance.setEnabled(val);
@@ -51,12 +76,29 @@ class ReProfile extends ConsumerWidget {
     final streakAsync = ref.watch(readingStreakProvider);
     final collectionsCount = ref.watch(collectionsCountProvider);
     final notifEnabled = ref.watch(_notifEnabledProvider);
+    final dailyCounts = ref.watch(thisWeekDailyCountsProvider);
+    final reminderTod = ref.watch(_reminderTimeProvider);
 
-    final savedVal = totalLinks.maybeWhen(data: (n) => '$n', orElse: () => '—');
-    final tagsVal = tags.maybeWhen(data: (t) => '${t.length}', orElse: () => '—');
-    final weekVal = thisWeek.maybeWhen(data: (n) => '$n', orElse: () => '—');
-    final streakVal = streakAsync.maybeWhen(data: (n) => '$n', orElse: () => '—');
-    final collVal = collectionsCount.maybeWhen(data: (n) => '$n', orElse: () => '—');
+    final savedVal =
+        totalLinks.maybeWhen(data: (n) => '$n', orElse: () => '—');
+    final tagsVal =
+        tags.maybeWhen(data: (t) => '${t.length}', orElse: () => '—');
+    final weekVal =
+        thisWeek.maybeWhen(data: (n) => '$n', orElse: () => '—');
+    final streakVal =
+        streakAsync.maybeWhen(data: (n) => '$n', orElse: () => '—');
+    final collVal = collectionsCount.maybeWhen(
+        data: (n) => '$n', orElse: () => '—');
+    final weekInt =
+        thisWeek.maybeWhen(data: (n) => n, orElse: () => 0);
+    final dailyCountsVal = dailyCounts.maybeWhen(
+        data: (counts) => counts, orElse: () => List.filled(7, 0));
+
+    // True when the app is currently rendered in dark — accounts for system theme
+    final effectiveDark = themeMode == ThemeMode.dark ||
+        (themeMode == ThemeMode.system &&
+            MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+
 
     return Scaffold(
       backgroundColor: c.background,
@@ -71,7 +113,7 @@ class ReProfile extends ConsumerWidget {
         children: [
           const SizedBox(height: 4),
 
-          // ── App identity card ──────────────────────────
+          // ── Identity card ──────────────────────────────
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -84,21 +126,43 @@ class ReProfile extends ConsumerWidget {
                 ],
               ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: c.accentBorder, width: 0.5),
+              border:
+                  Border.all(color: c.accentBorder, width: 0.5),
             ),
             child: Row(
               children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.brandGradient,
-                    borderRadius: BorderRadius.circular(14),
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.92, end: 1.0),
+                  duration: const Duration(milliseconds: 1800),
+                  curve: Curves.easeInOut,
+                  builder: (context, scale, child) => Transform.scale(
+                    scale: scale,
+                    child: child,
                   ),
-                  child: const Icon(
-                    Icons.bookmark_rounded,
-                    color: Colors.white,
-                    size: 26,
+                  onEnd: () {},
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: c.accent.withValues(alpha: 0.35),
+                          blurRadius: 14,
+                          spreadRadius: 1,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.asset(
+                        'assets/icons/logo.png',
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -117,22 +181,25 @@ class ReProfile extends ConsumerWidget {
                       const SizedBox(height: 2),
                       Text(
                         'Your knowledge vault',
-                        style: theme.bodySmall!.copyWith(color: c.textHint),
+                        style: theme.bodySmall!
+                            .copyWith(color: c.textHint),
                       ),
                     ],
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: c.surfaceElevated,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: c.border, width: 0.5),
+                    border:
+                        Border.all(color: c.border, width: 0.5),
                   ),
                   child: Text(
                     'v1.0',
-                    style: theme.labelSmall!.copyWith(color: c.textHint),
+                    style: theme.labelSmall!
+                        .copyWith(color: c.textHint),
                   ),
                 ),
               ],
@@ -141,28 +208,46 @@ class ReProfile extends ConsumerWidget {
 
           const SizedBox(height: 16),
 
-          // ── Stats row ──────────────────────────────────
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: c.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: c.border, width: 0.5),
-            ),
-            child: Row(
-              children: [
-                _StatPill(label: 'Saved', value: savedVal, c: c, theme: theme),
-                _VerticalDivider(c: c),
-                _StatPill(label: 'This week', value: weekVal, c: c, theme: theme),
-                _VerticalDivider(c: c),
-                _StatPill(label: 'Streak 🔥', value: streakVal, c: c, theme: theme),
-              ],
-            ),
+          // ── Colored stat tiles ─────────────────────────
+          Row(
+            children: [
+              _ColorStatTile(
+                value: savedVal,
+                label: 'Saved',
+                icon: Icons.bookmark_rounded,
+                accent: c.accent,
+                dimColor: c.accentDim,
+                c: c,
+              ),
+              const SizedBox(width: 10),
+              _ColorStatTile(
+                value: weekVal,
+                label: 'This week',
+                icon: Icons.trending_up_rounded,
+                accent: c.green,
+                dimColor: c.greenDim,
+                c: c,
+              ),
+              const SizedBox(width: 10),
+              _ColorStatTile(
+                value: streakVal,
+                label: 'Streak 🔥',
+                icon: Icons.local_fire_department_rounded,
+                accent: c.amber,
+                dimColor: c.amberDim,
+                c: c,
+              ),
+            ],
           ),
+
+          const SizedBox(height: 16),
+
+          // ── Reading insights card ──────────────────────
+          _InsightsCard(weekCount: weekInt, dailyCounts: dailyCountsVal, c: c, theme: theme),
 
           const SizedBox(height: 24),
 
-          // ── Section: Library ──────────────────────────
+          // ── Section: Library ───────────────────────────
           _SectionLabel(label: 'LIBRARY', c: c, theme: theme),
           const SizedBox(height: 8),
 
@@ -173,7 +258,8 @@ class ReProfile extends ConsumerWidget {
             subtitle: '$tagsVal categories',
             c: c,
             theme: theme,
-            trailing: Icon(Icons.chevron_right_rounded, size: 18, color: c.textHint),
+            trailing: Icon(Icons.chevron_right_rounded,
+                size: 18, color: c.textHint),
             onTap: () => context.go('/categories'),
           ),
 
@@ -186,7 +272,8 @@ class ReProfile extends ConsumerWidget {
             subtitle: '$collVal collections',
             c: c,
             theme: theme,
-            trailing: Icon(Icons.chevron_right_rounded, size: 18, color: c.textHint),
+            trailing: Icon(Icons.chevron_right_rounded,
+                size: 18, color: c.textHint),
             onTap: () => context.go('/collections'),
           ),
 
@@ -208,7 +295,7 @@ class ReProfile extends ConsumerWidget {
 
           const SizedBox(height: 24),
 
-          // ── Section: Data ─────────────────────────────
+          // ── Section: Data ──────────────────────────────
           _SectionLabel(label: 'DATA', c: c, theme: theme),
           const SizedBox(height: 8),
 
@@ -277,36 +364,40 @@ class ReProfile extends ConsumerWidget {
               if (!context.mounted) return;
               messenger.clearSnackBars();
               messenger.showSnackBar(
-                const SnackBar(content: Text('Link health check complete')),
+                const SnackBar(
+                    content:
+                        Text('Link health check complete')),
               );
             },
           ),
 
           const SizedBox(height: 24),
 
-          // ── Section: Preferences ──────────────────────
-          _SectionLabel(label: 'PREFERENCES', c: c, theme: theme),
+          // ── Section: Preferences ───────────────────────
+          _SectionLabel(
+              label: 'PREFERENCES', c: c, theme: theme),
           const SizedBox(height: 8),
 
           _SettingsTile(
-            icon: themeMode == ThemeMode.dark
+            icon: effectiveDark
                 ? Icons.light_mode_outlined
                 : Icons.dark_mode_outlined,
             iconColor: c.amber,
-            label: themeMode == ThemeMode.dark ? 'Light Mode' : 'Dark Mode',
-            subtitle: themeMode == ThemeMode.dark
+            label: effectiveDark ? 'Light Mode' : 'Dark Mode',
+            subtitle: effectiveDark
                 ? 'Switch to light theme'
                 : 'Switch to dark theme',
             c: c,
             theme: theme,
             trailing: Switch.adaptive(
-              value: themeMode == ThemeMode.dark,
+              value: effectiveDark,
               onChanged: (_) =>
                   ref.read(themeProvider.notifier).toggleTheme(),
               activeThumbColor: c.accent,
               activeTrackColor: c.accentDim,
             ),
-            onTap: () => ref.read(themeProvider.notifier).toggleTheme(),
+            onTap: () =>
+                ref.read(themeProvider.notifier).toggleTheme(),
           ),
 
           const SizedBox(height: 8),
@@ -315,21 +406,71 @@ class ReProfile extends ConsumerWidget {
             icon: Icons.notifications_outlined,
             iconColor: c.purple,
             label: 'Daily Reminders',
-            subtitle: 'Revisit forgotten links daily at 10 AM',
+            subtitle: notifEnabled
+                ? 'Fires daily at ${reminderTod.format(context)}'
+                : 'Turn on to get daily reminders',
             c: c,
             theme: theme,
             trailing: Switch.adaptive(
               value: notifEnabled,
-              onChanged: (val) => ref.read(_notifEnabledProvider.notifier).toggle(val),
+              onChanged: (val) =>
+                  ref.read(_notifEnabledProvider.notifier).toggle(val),
               activeThumbColor: c.accent,
               activeTrackColor: c.accentDim,
             ),
-            onTap: () => ref.read(_notifEnabledProvider.notifier).toggle(!notifEnabled),
+            onTap: () => ref
+                .read(_notifEnabledProvider.notifier)
+                .toggle(!notifEnabled),
           ),
+
+          if (notifEnabled) ...[
+            const SizedBox(height: 8),
+            _SettingsTile(
+              icon: Icons.schedule_rounded,
+              iconColor: c.accent,
+              label: 'Reminder Time',
+              subtitle: reminderTod.format(context),
+              c: c,
+              theme: theme,
+              trailing: Icon(Icons.chevron_right_rounded,
+                  size: 18, color: c.textHint),
+              onTap: () async {
+                final picked = await showTimePicker(
+                  context: context,
+                  initialTime: reminderTod,
+                );
+                if (picked == null) return;
+                await ref
+                    .read(_reminderTimeProvider.notifier)
+                    .update(picked.hour, picked.minute);
+              },
+            ),
+            const SizedBox(height: 8),
+            _SettingsTile(
+              icon: Icons.send_rounded,
+              iconColor: c.green,
+              label: 'Send Test Notification',
+              subtitle: 'Fires in 5 seconds',
+              c: c,
+              theme: theme,
+              trailing: Icon(Icons.chevron_right_rounded,
+                  size: 18, color: c.textHint),
+              onTap: () async {
+                await NotificationService.instance.sendTestNotification();
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Test notification fires in 5 seconds'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+            ),
+          ],
 
           const SizedBox(height: 24),
 
-          // ── Section: About ────────────────────────────
+          // ── Section: About ─────────────────────────────
           _SectionLabel(label: 'ABOUT', c: c, theme: theme),
           const SizedBox(height: 8),
 
@@ -344,7 +485,6 @@ class ReProfile extends ConsumerWidget {
 
           const SizedBox(height: 32),
 
-          // ── Footer ────────────────────────────────────
           Center(
             child: Text(
               'THE KINETIC ARCHITECT',
@@ -355,57 +495,254 @@ class ReProfile extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
         ],
       ),
     );
   }
 }
 
-// ── Stat Pill ─────────────────────────────────────────────────────────────────
+// ── Colored Stat Tile ─────────────────────────────────────────────────────────
 
-class _StatPill extends StatelessWidget {
-  final String label, value;
+class _ColorStatTile extends StatelessWidget {
+  final String value;
+  final String label;
+  final IconData icon;
+  final Color accent;
+  final Color dimColor;
+  final AppColorScheme c;
+
+  const _ColorStatTile({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.accent,
+    required this.dimColor,
+    required this.c,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context).textTheme;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+            horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: accent.withValues(alpha: 0.20),
+            width: 0.8,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: accent.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: dimColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 14, color: accent),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              value,
+              style: theme.titleLarge!.copyWith(
+                fontWeight: FontWeight.w700,
+                color: accent,
+                fontSize: 20,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              label,
+              style: theme.labelSmall!
+                  .copyWith(color: c.textHint, fontSize: 10),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Insights Card ─────────────────────────────────────────────────────────────
+
+class _InsightsCard extends StatelessWidget {
+  final int weekCount;
+  final List<int> dailyCounts;
   final AppColorScheme c;
   final TextTheme theme;
 
-  const _StatPill({
-    required this.label,
-    required this.value,
+  const _InsightsCard({
+    required this.weekCount,
+    required this.dailyCounts,
     required this.c,
     required this.theme,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
+    const days = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+    final today = DateTime.now().weekday - 1;
+    final maxCount = dailyCounts.isEmpty ? 1 : dailyCounts.reduce(max);
+    final pattern = dailyCounts
+        .map((c) => maxCount == 0 ? 0.0 : c / maxCount)
+        .toList();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border, width: 0.5),
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value,
-            style: theme.titleLarge!.copyWith(
-              fontWeight: FontWeight.w700,
-              color: c.textPrimary,
+          // Header row
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: c.purpleDim,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(Icons.insights_rounded,
+                    size: 16, color: c.purple),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Saved This Week',
+                      style: theme.titleSmall!.copyWith(
+                          fontWeight: FontWeight.w700),
+                    ),
+                    Text(
+                      'This week',
+                      style: theme.bodySmall!.copyWith(
+                          color: c.textHint, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: c.greenDim,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.trending_up_rounded,
+                        size: 12, color: c.green),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$weekCount saved',
+                      style: theme.labelSmall!.copyWith(
+                        color: c.green,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // Bars
+          SizedBox(
+            height: 60,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: List.generate(7, (i) {
+                final isToday = i == today;
+                return Expanded(
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 3),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        AnimatedContainer(
+                          duration: Duration(
+                              milliseconds: 400 + i * 60),
+                          curve: Curves.easeOutCubic,
+                          height: 44 * pattern[i] + 4,
+                          decoration: BoxDecoration(
+                            gradient: isToday
+                                ? AppColors.brandGradient
+                                : null,
+                            color: isToday
+                                ? null
+                                : c.surfaceElevated,
+                            borderRadius: BorderRadius.circular(5),
+                            boxShadow: isToday
+                                ? [
+                                    BoxShadow(
+                                      color: c.accent.withValues(
+                                          alpha: 0.35),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
             ),
           ),
-          const SizedBox(height: 2),
-          Text(label,
-              style: theme.labelSmall!.copyWith(color: c.textHint)),
+
+          const SizedBox(height: 6),
+
+          // Day labels
+          Row(
+            children: List.generate(7, (i) {
+              final isToday = i == today;
+              return Expanded(
+                child: Center(
+                  child: Text(
+                    days[i],
+                    style: theme.labelSmall!.copyWith(
+                      color: isToday ? c.accent : c.textHint,
+                      fontWeight: isToday
+                          ? FontWeight.w700
+                          : FontWeight.w400,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
         ],
       ),
     );
-  }
-}
-
-class _VerticalDivider extends StatelessWidget {
-  final AppColorScheme c;
-  const _VerticalDivider({required this.c});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-        width: 0.5, height: 28, color: c.border,
-        margin: const EdgeInsets.symmetric(horizontal: 8));
   }
 }
 
@@ -417,7 +754,9 @@ class _SectionLabel extends StatelessWidget {
   final TextTheme theme;
 
   const _SectionLabel(
-      {required this.label, required this.c, required this.theme});
+      {required this.label,
+      required this.c,
+      required this.theme});
 
   @override
   Widget build(BuildContext context) {
@@ -468,7 +807,8 @@ class _SettingsTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         splashColor: c.accent.withValues(alpha: 0.06),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: c.border, width: 0.5),
@@ -500,14 +840,14 @@ class _SettingsTile extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         subtitle!,
-                        style: theme.bodySmall!
-                            .copyWith(color: c.textHint, fontSize: 11),
+                        style: theme.bodySmall!.copyWith(
+                            color: c.textHint, fontSize: 11),
                       ),
                     ],
                   ],
                 ),
               ),
-              ?trailing,
+              if (trailing != null) trailing!,
             ],
           ),
         ),

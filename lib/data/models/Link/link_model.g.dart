@@ -72,8 +72,13 @@ const LinkModelSchema = CollectionSchema(
       name: r'title',
       type: IsarType.string,
     ),
-    r'url': PropertySchema(
+    r'updatedAt': PropertySchema(
       id: 11,
+      name: r'updatedAt',
+      type: IsarType.dateTime,
+    ),
+    r'url': PropertySchema(
+      id: 12,
       name: r'url',
       type: IsarType.string,
     )
@@ -107,6 +112,32 @@ const LinkModelSchema = CollectionSchema(
           name: r'url',
           type: IndexType.hash,
           caseSensitive: true,
+        )
+      ],
+    ),
+    r'description': IndexSchema(
+      id: -6307138540013950700,
+      name: r'description',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'description',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'notes': IndexSchema(
+      id: 8092016287011465773,
+      name: r'notes',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'notes',
+          type: IndexType.value,
+          caseSensitive: false,
         )
       ],
     )
@@ -196,7 +227,8 @@ void _linkModelSerialize(
   writer.writeString(offsets[8], object.siteName);
   writer.writeString(offsets[9], object.thumbnail);
   writer.writeString(offsets[10], object.title);
-  writer.writeString(offsets[11], object.url);
+  writer.writeDateTime(offsets[11], object.updatedAt);
+  writer.writeString(offsets[12], object.url);
 }
 
 LinkModel _linkModelDeserialize(
@@ -218,7 +250,8 @@ LinkModel _linkModelDeserialize(
   object.siteName = reader.readStringOrNull(offsets[8]);
   object.thumbnail = reader.readStringOrNull(offsets[9]);
   object.title = reader.readString(offsets[10]);
-  object.url = reader.readString(offsets[11]);
+  object.updatedAt = reader.readDateTimeOrNull(offsets[11]);
+  object.url = reader.readString(offsets[12]);
   return object;
 }
 
@@ -252,6 +285,8 @@ P _linkModelDeserializeProp<P>(
     case 10:
       return (reader.readString(offset)) as P;
     case 11:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 12:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -331,6 +366,22 @@ extension LinkModelQueryWhereSort
   QueryBuilder<LinkModel, LinkModel, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhere> anyDescription() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'description'),
+      );
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhere> anyNotes() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'notes'),
+      );
     });
   }
 }
@@ -486,6 +537,319 @@ extension LinkModelQueryWhere
               lower: [],
               upper: [url],
               includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> descriptionIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'description',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> descriptionIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'description',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> descriptionEqualTo(
+      String? description) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'description',
+        value: [description],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> descriptionNotEqualTo(
+      String? description) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'description',
+              lower: [],
+              upper: [description],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'description',
+              lower: [description],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'description',
+              lower: [description],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'description',
+              lower: [],
+              upper: [description],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> descriptionGreaterThan(
+    String? description, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'description',
+        lower: [description],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> descriptionLessThan(
+    String? description, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'description',
+        lower: [],
+        upper: [description],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> descriptionBetween(
+    String? lowerDescription,
+    String? upperDescription, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'description',
+        lower: [lowerDescription],
+        includeLower: includeLower,
+        upper: [upperDescription],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> descriptionStartsWith(
+      String DescriptionPrefix) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'description',
+        lower: [DescriptionPrefix],
+        upper: ['$DescriptionPrefix\u{FFFFF}'],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> descriptionIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'description',
+        value: [''],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause>
+      descriptionIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.lessThan(
+              indexName: r'description',
+              upper: [''],
+            ))
+            .addWhereClause(IndexWhereClause.greaterThan(
+              indexName: r'description',
+              lower: [''],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.greaterThan(
+              indexName: r'description',
+              lower: [''],
+            ))
+            .addWhereClause(IndexWhereClause.lessThan(
+              indexName: r'description',
+              upper: [''],
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> notesIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'notes',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> notesIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'notes',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> notesEqualTo(
+      String? notes) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'notes',
+        value: [notes],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> notesNotEqualTo(
+      String? notes) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'notes',
+              lower: [],
+              upper: [notes],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'notes',
+              lower: [notes],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'notes',
+              lower: [notes],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'notes',
+              lower: [],
+              upper: [notes],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> notesGreaterThan(
+    String? notes, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'notes',
+        lower: [notes],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> notesLessThan(
+    String? notes, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'notes',
+        lower: [],
+        upper: [notes],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> notesBetween(
+    String? lowerNotes,
+    String? upperNotes, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'notes',
+        lower: [lowerNotes],
+        includeLower: includeLower,
+        upper: [upperNotes],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> notesStartsWith(
+      String NotesPrefix) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'notes',
+        lower: [NotesPrefix],
+        upper: ['$NotesPrefix\u{FFFFF}'],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> notesIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'notes',
+        value: [''],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> notesIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.lessThan(
+              indexName: r'notes',
+              upper: [''],
+            ))
+            .addWhereClause(IndexWhereClause.greaterThan(
+              indexName: r'notes',
+              lower: [''],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.greaterThan(
+              indexName: r'notes',
+              lower: [''],
+            ))
+            .addWhereClause(IndexWhereClause.lessThan(
+              indexName: r'notes',
+              upper: [''],
             ));
       }
     });
@@ -1712,6 +2076,77 @@ extension LinkModelQueryFilter
     });
   }
 
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition> updatedAtIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'updatedAt',
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition>
+      updatedAtIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'updatedAt',
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition> updatedAtEqualTo(
+      DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition>
+      updatedAtGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition> updatedAtLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition> updatedAtBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'updatedAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition> urlEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -2052,6 +2487,18 @@ extension LinkModelQuerySortBy on QueryBuilder<LinkModel, LinkModel, QSortBy> {
     });
   }
 
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> sortByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> sortByUpdatedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.desc);
+    });
+  }
+
   QueryBuilder<LinkModel, LinkModel, QAfterSortBy> sortByUrl() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'url', Sort.asc);
@@ -2211,6 +2658,18 @@ extension LinkModelQuerySortThenBy
     });
   }
 
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> thenByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> thenByUpdatedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.desc);
+    });
+  }
+
   QueryBuilder<LinkModel, LinkModel, QAfterSortBy> thenByUrl() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'url', Sort.asc);
@@ -2299,6 +2758,12 @@ extension LinkModelQueryWhereDistinct
     });
   }
 
+  QueryBuilder<LinkModel, LinkModel, QDistinct> distinctByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'updatedAt');
+    });
+  }
+
   QueryBuilder<LinkModel, LinkModel, QDistinct> distinctByUrl(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2378,6 +2843,12 @@ extension LinkModelQueryProperty
   QueryBuilder<LinkModel, String, QQueryOperations> titleProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'title');
+    });
+  }
+
+  QueryBuilder<LinkModel, DateTime?, QQueryOperations> updatedAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'updatedAt');
     });
   }
 

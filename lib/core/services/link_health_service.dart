@@ -12,22 +12,27 @@ class LinkHealthService {
   static const _tsPrefix = 'health_ts_';
   static const _checkIntervalHours = 24;
 
+  static const _concurrency = 5;
+
   Future<void> checkAll(Isar isar) async {
     final prefs = await SharedPreferences.getInstance();
     final links = await isar.linkModels.where().findAll();
     final now = DateTime.now().millisecondsSinceEpoch;
 
-    for (final link in links) {
-      final key = '$_prefix${link.id}';
-      final tsKey = '$_tsPrefix${link.id}';
-      final lastTs = prefs.getInt(tsKey) ?? 0;
-      final hoursSince = (now - lastTs) / (1000 * 3600);
+    // Filter to only links that are actually due for a re-check
+    final due = links.where((link) {
+      final lastTs = prefs.getInt('$_tsPrefix${link.id}') ?? 0;
+      return (now - lastTs) / (1000 * 3600) >= _checkIntervalHours;
+    }).toList();
 
-      if (hoursSince < _checkIntervalHours) continue;
-
-      final alive = await _checkUrl(link.url);
-      await prefs.setBool(key, alive);
-      await prefs.setInt(tsKey, now);
+    // Process in batches of _concurrency to avoid hammering the network
+    for (int i = 0; i < due.length; i += _concurrency) {
+      final batch = due.skip(i).take(_concurrency).toList();
+      await Future.wait(batch.map((link) async {
+        final alive = await _checkUrl(link.url);
+        await prefs.setBool('$_prefix${link.id}', alive);
+        await prefs.setInt('$_tsPrefix${link.id}', now);
+      }));
     }
   }
 

@@ -1,11 +1,45 @@
+import 'dart:async';
 import 'dart:math' show max, min;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:recallr/common/widgets.dart';
+import 'package:recallr/core/services/share_intent_service.dart';
+import 'package:recallr/main.dart' show pendingSharedUrl;
 import 'package:recallr/theme/recallr_colors.dart';
 
-class MainNavigation extends StatelessWidget {
+class MainNavigation extends StatefulWidget {
   final Widget child;
   const MainNavigation({super.key, required this.child});
+
+  @override
+  State<MainNavigation> createState() => _MainNavigationState();
+}
+
+class _MainNavigationState extends State<MainNavigation> {
+  StreamSubscription<String>? _shareSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Handle URL that launched the app via share intent (cold-start)
+      if (pendingSharedUrl != null) {
+        final url = pendingSharedUrl!;
+        pendingSharedUrl = null;
+        if (mounted) ReWid.openSaveSheet(context, initialUrl: url);
+      }
+      // Handle URLs shared while the app is already running
+      _shareSubscription = ShareIntentService.urlStream.listen((url) {
+        if (mounted) ReWid.openSaveSheet(context, initialUrl: url);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _shareSubscription?.cancel();
+    super.dispose();
+  }
 
   int _currentIndex(BuildContext context) {
     final loc = GoRouterState.of(context).uri.toString();
@@ -28,7 +62,7 @@ class MainNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     final index = _currentIndex(context);
     return Scaffold(
-      body: child,
+      body: widget.child,
       bottomNavigationBar: _CustomNavBar(
         currentIndex: index,
         onTap: (i) => _onTap(context, i),

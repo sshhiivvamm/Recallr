@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../common/sheet_fab.dart';
 import '../../../data/models/collection_model.dart';
@@ -45,6 +46,30 @@ class ReCollections extends ConsumerWidget {
   }
 }
 
+// ── Color helpers ─────────────────────────────────────────────────────────────
+
+const _kPaletteColors = [
+  AppColors.cyan,
+  AppColors.purple,
+  AppColors.green,
+  AppColors.amber,
+  AppColors.coral,
+  Color(0xFF60A5FA), // blue
+];
+
+Color _colorFromHex(String? hex, Color fallback) {
+  if (hex == null || hex.isEmpty) return fallback;
+  try {
+    final sanitized = hex.replaceFirst('#', '');
+    return Color(int.parse('FF$sanitized', radix: 16));
+  } catch (_) {
+    return fallback;
+  }
+}
+
+String _hexFromColor(Color color) =>
+    color.toARGB32().toRadixString(16).substring(2).toUpperCase();
+
 // ── Create-collection sheet ───────────────────────────────────────────────────
 
 class _CollectionCreateSheet extends ConsumerStatefulWidget {
@@ -67,9 +92,11 @@ class _CollectionCreateSheetState
   @override
   ValueChanged<double>? get onSheetTopY => widget.onSheetTopY;
   @override
-  ValueChanged<Animation<double>>? get onSheetAnimation => widget.onSheetAnimation;
+  ValueChanged<Animation<double>>? get onSheetAnimation =>
+      widget.onSheetAnimation;
 
   final _ctrl = TextEditingController();
+  Color _selectedColor = AppColors.cyan;
 
   @override
   void dispose() {
@@ -81,14 +108,16 @@ class _CollectionCreateSheetState
     final name = _ctrl.text.trim();
     if (name.isEmpty) return;
     final repo = await ref.read(collectionRepoProvider.future);
-    await repo.create(name);
+    await repo.create(name, colorHex: _hexFromColor(_selectedColor));
     if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final theme = Theme.of(context).textTheme;
     final kb = MediaQuery.of(context).viewInsets.bottom;
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + kb),
@@ -103,9 +132,7 @@ class _CollectionCreateSheetState
         children: [
           Text(
             'New Collection',
-            style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: theme.titleMedium!.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -115,6 +142,52 @@ class _CollectionCreateSheetState
             onSubmitted: (_) => _save(),
           ),
           const SizedBox(height: 16),
+          Text(
+            'COLOR',
+            style: theme.labelSmall!.copyWith(
+              color: c.textHint,
+              letterSpacing: 1.4,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: _kPaletteColors.map((color) {
+              final isSelected = _selectedColor == color;
+              return Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedColor = color),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: isSelected
+                          ? Border.all(color: Colors.white, width: 2.5)
+                          : null,
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: color.withValues(alpha: 0.5),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                              )
+                            ]
+                          : null,
+                    ),
+                    child: isSelected
+                        ? const Icon(Icons.check_rounded,
+                            color: Colors.white, size: 14)
+                        : null,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
@@ -148,7 +221,8 @@ class _Body extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     border: Border.all(color: c.border, width: 0.5),
                     borderRadius: BorderRadius.circular(20),
@@ -180,7 +254,8 @@ class _Body extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 6),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: c.accentDim,
                           borderRadius: BorderRadius.circular(8),
@@ -216,7 +291,12 @@ class _Body extends ConsumerWidget {
                   folder: folders[index],
                   c: c,
                   theme: theme,
-                  onDelete: () => _confirmDelete(ctx, ref, folders[index]),
+                  onTap: () => ctx.push(
+                    '/collections/${folders[index].id}',
+                    extra: folders[index],
+                  ),
+                  onDelete: () =>
+                      _confirmDelete(ctx, ref, folders[index]),
                 ),
                 childCount: folders.length,
               ),
@@ -232,17 +312,22 @@ class _Body extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, FolderModel folder) async {
+  Future<void> _confirmDelete(
+      BuildContext context, WidgetRef ref, FolderModel folder) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Collection'),
-        content: Text("Delete '${folder.name}'? Links won't be affected."),
+        content:
+            Text("Delete '${folder.name}'? Links won't be affected."),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Delete', style: TextStyle(color: context.colors.coral)),
+            child: Text('Delete',
+                style: TextStyle(color: context.colors.coral)),
           ),
         ],
       ),
@@ -257,91 +342,136 @@ class _Body extends ConsumerWidget {
 
 // ── Folder Card ───────────────────────────────────────────────────────────────
 
-class _FolderCard extends ConsumerWidget {
+class _FolderCard extends StatefulWidget {
   final FolderModel folder;
   final AppColorScheme c;
   final TextTheme theme;
+  final VoidCallback onTap;
   final VoidCallback onDelete;
 
   const _FolderCard({
     required this.folder,
     required this.c,
     required this.theme,
+    required this.onTap,
     required this.onDelete,
   });
 
-  static const _colors = [
-    AppColors.cyan,
-    AppColors.purple,
-    AppColors.green,
-    AppColors.amber,
-    AppColors.coral,
-  ];
+  @override
+  State<_FolderCard> createState() => _FolderCardState();
+}
+
+class _FolderCardState extends State<_FolderCard> {
+  bool _pressed = false;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final color = _colors[folder.id % _colors.length];
+  Widget build(BuildContext context) {
+    final folder = widget.folder;
+    final c = widget.c;
+    final theme = widget.theme;
+
+    const fallbacks = [
+      AppColors.cyan,
+      AppColors.purple,
+      AppColors.green,
+      AppColors.amber,
+      AppColors.coral,
+    ];
+    final color = _colorFromHex(
+      folder.colorHex,
+      fallbacks[folder.id % fallbacks.length],
+    );
     final linkCount = folder.links.length;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border, width: 0.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.folder_rounded, color: color, size: 20),
+    return Listener(
+      onPointerDown: (_) => setState(() => _pressed = true),
+      onPointerUp: (_) => setState(() => _pressed = false),
+      onPointerCancel: (_) => setState(() => _pressed = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _pressed ? 0.972 : 1.0,
+          duration: const Duration(milliseconds: 100),
+          curve: Curves.easeOut,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _pressed ? c.surfaceElevated : c.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _pressed ? color.withValues(alpha: 0.4) : c.border,
+                width: _pressed ? 1.0 : 0.5,
               ),
-              const Spacer(),
-              GestureDetector(
-                onTap: onDelete,
-                child: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: c.surfaceElevated,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: c.border, width: 0.5),
+              boxShadow: _pressed
+                  ? []
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.folder_rounded,
+                          color: color, size: 20),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: widget.onDelete,
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: c.surfaceElevated,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: c.border, width: 0.5),
+                        ),
+                        child: Icon(Icons.close_rounded,
+                            size: 14, color: c.textHint),
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Text(
+                  folder.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.titleSmall!.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: c.textPrimary,
                   ),
-                  child: Icon(Icons.close_rounded, size: 14, color: c.textHint),
                 ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          Text(
-            folder.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.titleSmall!.copyWith(
-              fontWeight: FontWeight.w700,
-              color: c.textPrimary,
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      '$linkCount ${linkCount == 1 ? 'link' : 'links'}',
+                      style:
+                          theme.labelSmall!.copyWith(color: c.textHint),
+                    ),
+                    const Spacer(),
+                    Icon(Icons.arrow_outward_rounded,
+                        size: 14, color: color),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Text(
-                '$linkCount ${linkCount == 1 ? 'link' : 'links'}',
-                style: theme.labelSmall!.copyWith(color: c.textHint),
-              ),
-              const Spacer(),
-              Icon(Icons.arrow_outward_rounded, size: 14, color: color),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }

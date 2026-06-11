@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:recallr/data/models/Link/link_model.dart';
 import 'package:recallr/data/models/Tag/tag_model.dart';
@@ -18,6 +19,7 @@ void main() {
 
   setUp(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
     _counter++;
     tempDir = await Directory.systemTemp.createTemp('isar_link_test');
     isar = await Isar.open(

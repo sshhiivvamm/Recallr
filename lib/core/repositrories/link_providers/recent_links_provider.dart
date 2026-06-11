@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/sm2_service.dart';
 import '../../../data/models/Link/link_model.dart';
 import 'link_repository_provider.dart';
 
@@ -20,6 +21,27 @@ final totalLinksCountProvider = StreamProvider<int>((ref) {
 final thisWeekLinksCountProvider = StreamProvider<int>((ref) {
   final repo = ref.watch(linkRepositoryProvider);
   return repo.watchThisWeekLinksCount();
+});
+
+final thisWeekDailyCountsProvider = StreamProvider<List<int>>((ref) {
+  final repo = ref.watch(linkRepositoryProvider);
+  return repo.watchThisWeekDailyCounts();
+});
+
+final nextReadProvider = FutureProvider<LinkModel?>((ref) {
+  final repo = ref.watch(linkRepositoryProvider);
+  return repo.getNextRead();
+});
+
+final reviewQueueProvider = FutureProvider<List<LinkModel>>((ref) async {
+  final repo = ref.watch(linkRepositoryProvider);
+  final all = await repo.getAllLinks();
+  return Sm2Service.instance.getReviewQueue(all);
+});
+
+final reviewDueCountProvider = FutureProvider<int>((ref) async {
+  final queue = await ref.watch(reviewQueueProvider.future);
+  return queue.length;
 });
 
 final recentLinksStreamProvider =

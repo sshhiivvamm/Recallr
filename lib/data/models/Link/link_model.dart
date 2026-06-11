@@ -16,7 +16,10 @@ class LinkModel {
   @Index(unique: true)
   late String url;
 
+  @Index(type: IndexType.value, caseSensitive: false)
   String? description; // from metadata
+
+  @Index(type: IndexType.value, caseSensitive: false)
   String? notes;       // user-added notes
 
   String? thumbnail;   // og:image
@@ -28,7 +31,8 @@ class LinkModel {
   bool isRead = false;
 
   DateTime createdAt = DateTime.now();
-  DateTime? lastOpenedAt; // NEW
+  DateTime? lastOpenedAt;
+  DateTime? updatedAt;
 
   final tags = IsarLinks<TagModel>();
   final folder = IsarLink<FolderModel>();

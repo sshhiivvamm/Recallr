@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,16 +7,22 @@ import 'package:recallr/theme/recallr_colors.dart';
 
 import '../core/database/providers/isar_provider.dart';
 import '../core/features/category/tag_list_provider.dart';
+import '../core/features/category/tag_provider.dart';
 import '../core/features/collections/collection_provider.dart';
+import '../core/services/auto_categorizer.dart';
+import '../core/services/tag_suggester.dart';
 import '../data/models/Link/link_model.dart';
 import '../data/models/Tag/tag_model.dart';
 import '../data/models/collection_model.dart';
 
-// ── Public API — unchanged call-site ─────────────────────────────────────────
+// ── Public API ────────────────────────────────────────────────────────────────
 
 class ReWid {
+  /// Opens the save-link bottom sheet.
+  /// Pass [initialUrl] to pre-fill (e.g. from Android share intent).
   static Future<void> openSaveSheet(
     BuildContext context, {
+    String? initialUrl,
     ValueChanged<double>? onSheetTopY,
     ValueChanged<Animation<double>>? onSheetAnimation,
   }) {
@@ -24,6 +31,7 @@ class ReWid {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _SaveLinkSheet(
+        initialUrl: initialUrl,
         onSheetTopY: onSheetTopY,
         onSheetAnimation: onSheetAnimation,
       ),
@@ -37,9 +45,10 @@ class ReWid {
 // ── Sheet widget ──────────────────────────────────────────────────────────────
 
 class _SaveLinkSheet extends ConsumerStatefulWidget {
+  final String? initialUrl;
   final ValueChanged<double>? onSheetTopY;
   final ValueChanged<Animation<double>>? onSheetAnimation;
-  const _SaveLinkSheet({this.onSheetTopY, this.onSheetAnimation});
+  const _SaveLinkSheet({this.initialUrl, this.onSheetTopY, this.onSheetAnimation});
 
   @override
   ConsumerState<_SaveLinkSheet> createState() => _SaveLinkSheetState();
@@ -57,20 +66,29 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
   String? _domain;
   TagModel? _selectedTag;
   FolderModel? _selectedFolder;
+  String? _autoTagSuggestion; // shown as a banner when share intent provides URL
 
   @override
   void initState() {
     super.initState();
+    if (widget.initialUrl != null) {
+      // Pre-fill URL from share intent and kick off metadata fetch
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _urlCtrl.text = widget.initialUrl!;
+        _fetchMeta(widget.initialUrl!);
+        final suggestion = AutoCategorizer.suggest(widget.initialUrl!);
+        if (suggestion != null) setState(() => _autoTagSuggestion = suggestion);
+      });
+    }
     if (widget.onSheetTopY != null || widget.onSheetAnimation != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        // box.size.height is the sheet's natural height — stable across animation
         final box = context.findRenderObject() as RenderBox?;
         if (box != null && widget.onSheetTopY != null) {
           final screenH = MediaQuery.of(context).size.height;
           widget.onSheetTopY!.call(screenH - box.size.height);
         }
-        // Pass the raw route animation so the parent can track the sheet edge
         final anim = ModalRoute.of(context)?.animation;
         if (anim != null) widget.onSheetAnimation?.call(anim);
       });
@@ -110,6 +128,23 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
         }
         _fetchingMeta = false;
       });
+
+      // Smart tag suggestion after fetch (only if no tag selected yet)
+      if (_selectedTag == null && _autoTagSuggestion == null) {
+        final userTags = ref.read(tagListProvider).valueOrNull ?? [];
+        final title = _titleCtrl.text;
+        final matched = TagSuggester.suggest(url, title, userTags);
+        if (matched != null && mounted) {
+          setState(() => _autoTagSuggestion = matched.name);
+        } else {
+          // No existing tag matched — fall back to domain detection so the
+          // category is auto-created on save even when the user has no tags yet.
+          final domainHint = AutoCategorizer.suggest(url);
+          if (domainHint != null && mounted) {
+            setState(() => _autoTagSuggestion = domainHint);
+          }
+        }
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _fetchingMeta = false);
@@ -140,10 +175,18 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
         ..favicon = 'https://www.google.com/s2/favicons?domain=$domain&sz=64'
         ..notes = _notesCtrl.text.trim();
 
+      // Resolve tag: manual selection wins; fall back to auto-detected category
+      TagModel? tagToApply = _selectedTag;
+      if (tagToApply == null && _autoTagSuggestion != null) {
+        tagToApply = await ref
+            .read(tagRepositoryProvider)
+            .findOrCreateSystemTag(_autoTagSuggestion!);
+      }
+
       await isar.writeTxn(() async {
         await isar.linkModels.put(link);
-        if (_selectedTag != null) {
-          link.tags.add(_selectedTag!);
+        if (tagToApply != null) {
+          link.tags.add(tagToApply);
           await link.tags.save();
         }
         if (_selectedFolder != null) {
@@ -154,6 +197,19 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
 
       if (!mounted) return;
       Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.toString().contains('unique')
+                  ? 'This link is already saved.'
+                  : 'Could not save link. Please try again.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -204,17 +260,13 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
             // ── Title row ───────────────────────────────
             Row(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.brandGradient,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.bookmark_add_rounded,
-                    color: Colors.white,
-                    size: 18,
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.asset(
+                    'assets/icons/logo.png',
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -262,6 +314,50 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
                 });
               },
             ),
+
+            // ── Auto-tag suggestion banner (share intent) ─
+            if (_autoTagSuggestion != null && _selectedTag == null)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: GestureDetector(
+                  onTap: () {
+                    final tags = ref.read(tagListProvider).valueOrNull ?? [];
+                    final match = tags.where((t) =>
+                        t.name.toLowerCase() == _autoTagSuggestion!.toLowerCase()
+                    ).firstOrNull;
+                    if (match != null) setState(() => _selectedTag = match);
+                    setState(() => _autoTagSuggestion = null);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: c.accentDim,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: c.accentBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.auto_awesome_rounded, size: 14, color: c.accent),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Auto-detected category: $_autoTagSuggestion — tap to apply',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: c.accent,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _autoTagSuggestion = null),
+                          child: Icon(Icons.close_rounded, size: 14, color: c.textHint),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
 
             // ── Preview card ─────────────────────────────
             AnimatedSize(
@@ -568,12 +664,12 @@ class _PreviewCard extends StatelessWidget {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(7),
-                      child: Image.network(
-                        'https://www.google.com/s2/favicons?domain=$domain&sz=64',
+                      child: CachedNetworkImage(
+                        imageUrl: 'https://www.google.com/s2/favicons?domain=$domain&sz=64',
                         width: 32,
                         height: 32,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, e, s) => Icon(
+                        errorWidget: (_, url, e) => Icon(
                           Icons.language_rounded,
                           size: 16,
                           color: c.textHint,
@@ -687,7 +783,7 @@ class _CategoryRow extends StatelessWidget {
             }),
             if (tags.isEmpty)
               Text(
-                'No categories — create one above',
+                'Tap + New to create your first category',
                 style: theme.bodySmall!.copyWith(color: c.textHint),
               ),
           ],
@@ -936,11 +1032,11 @@ class _FolderRow extends StatelessWidget {
     final foldersAsync = ref.watch(collectionsStreamProvider);
     return foldersAsync.when(
       loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (e, st) => const SizedBox.shrink(),
       data: (folders) {
         if (folders.isEmpty) {
           return Text(
-            'No collections — create one in Profile',
+            'No collections yet — create one in the Collections tab',
             style: theme.bodySmall!.copyWith(color: c.textHint),
           );
         }

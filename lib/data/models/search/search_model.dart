@@ -1,5 +1,20 @@
+import '../Link/link_model.dart';
 import '../Tag/tag_model.dart';
 import '../collection_model.dart';
+
+enum MatchedField { title, description, notes, highlight }
+
+class SearchResult {
+  final LinkModel link;
+  final MatchedField matchedField;
+  final String? snippet;
+
+  const SearchResult({
+    required this.link,
+    required this.matchedField,
+    this.snippet,
+  });
+}
 
 class LinkSearchParams {
   final String? query;

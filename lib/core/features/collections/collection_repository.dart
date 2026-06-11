@@ -8,11 +8,14 @@ class CollectionRepository {
 
   CollectionRepository(this.isar);
 
-  Stream<List<FolderModel>> watchAll() {
-    return isar.folderModels
+  Stream<List<FolderModel>> watchAll() async* {
+    await for (final folders in isar.folderModels
         .where()
         .sortBySortOrder()
-        .watch(fireImmediately: true);
+        .watch(fireImmediately: true)) {
+      await Future.wait(folders.map((f) => f.links.load()));
+      yield folders;
+    }
   }
 
   Future<List<FolderModel>> getAll() {
@@ -54,6 +57,16 @@ class CollectionRepository {
       link.folder.value = folder;
       await link.folder.save();
     });
+  }
+
+  Future<List<LinkModel>> getLinksByFolder(int folderId) async {
+    final folder = await isar.folderModels.get(folderId);
+    if (folder == null) return [];
+    await folder.links.load();
+    final links = folder.links.toList();
+    await Future.wait(links.map((l) => l.tags.load()));
+    links.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return links;
   }
 
   Stream<int> watchCount() {

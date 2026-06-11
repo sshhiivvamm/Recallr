@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../common/all_links_wid.dart';
 import '../../../common/chips_filter.dart';
 import '../../../data/models/search/search_model.dart';
 import '../../../theme/recallr_colors.dart';
-import '../../repositrories/link_providers/link_repository_provider.dart';
 import '../../repositrories/search/search_provider.dart';
 
 // ── Screen ───────────────────────────────────────────────────────────────────
@@ -22,19 +20,11 @@ class AllLinksScreen extends ConsumerStatefulWidget {
 class _AllLinksScreenState extends ConsumerState<AllLinksScreen> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
-  bool _showElevation = false;
-
   @override
   void dispose() {
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  void _updateQuery(String query) {
-    ref
-        .read(searchParamsProvider.notifier)
-        .update((s) => s.copyWith(query: query.isEmpty ? null : query));
   }
 
   void _updateSort(LinkSort sort) {
@@ -80,7 +70,7 @@ class _AllLinksScreenState extends ConsumerState<AllLinksScreen> {
           SliverAppBar(
             pinned: true,
             backgroundColor: c.background,
-            elevation: _showElevation ? 0 : 0,
+            elevation: 0,
             surfaceTintColor: Colors.transparent,
             leading: IconButton(
               icon: Icon(
@@ -252,25 +242,21 @@ class _AllLinksScreenState extends ConsumerState<AllLinksScreen> {
                       ? ListView.separated(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
                           itemCount: links.length,
-                          separatorBuilder: (_, __) =>
+                          separatorBuilder: (ctx, i) =>
                               const SizedBox(height: 8),
-                          itemBuilder: (_, i) => LinkCard(
-                            link: links[i],
-                            c: c,
-                            theme: theme,
-                            onTap: () => _launchAndTrack(context, links[i].url, links[i].id, ref),
+                          itemBuilder: (ctx, i) => LinkCard(
+                            link: links[i].link,
+                            onTap: () => _openInReader(context, links[i].link.url, links[i].link.id),
                           ),
                         )
                       : ListView.separated(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
                           itemCount: links.length,
-                          separatorBuilder: (_, __) =>
+                          separatorBuilder: (ctx, i) =>
                               Divider(color: c.border, height: 1),
-                          itemBuilder: (_, i) => CompactRow(
-                            link: links[i],
-                            c: c,
-                            theme: theme,
-                            onTap: () => _launchAndTrack(context, links[i].url, links[i].id, ref),
+                          itemBuilder: (ctx, i) => CompactRow(
+                            link: links[i].link,
+                            onTap: () => _openInReader(context, links[i].link.url, links[i].link.id),
                           ),
                         ),
                 ),
@@ -280,8 +266,8 @@ class _AllLinksScreenState extends ConsumerState<AllLinksScreen> {
           loading: () => ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
             itemCount: 6,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (_, __) => SkeletonCard(c: c),
+            separatorBuilder: (ctx, i) => const SizedBox(height: 8),
+            itemBuilder: (ctx, i) => LinkSkeletonCard(c: c),
           ),
           error: (e, _) => Center(
             child: Column(
@@ -312,7 +298,7 @@ class _AllLinksScreenState extends ConsumerState<AllLinksScreen> {
     LinkSort value,
     LinkSort current,
     IconData icon,
-    dynamic c,
+    AppColorScheme c,
     TextTheme theme,
   ) {
     final selected = current == value;
@@ -339,21 +325,12 @@ class _AllLinksScreenState extends ConsumerState<AllLinksScreen> {
   }
 }
 
-// ── URL launcher helper ───────────────────────────────────────────────────────
+// ── Reader navigation helper ──────────────────────────────────────────────────
 
-Future<void> _launchAndTrack(BuildContext context, String? rawUrl, int linkId, WidgetRef ref) async {
+void _openInReader(BuildContext context, String? rawUrl, int linkId) {
   if (rawUrl == null || rawUrl.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid URL')));
     return;
   }
-  final uri = Uri.parse(rawUrl.startsWith('http') ? rawUrl : 'https://$rawUrl');
-  try {
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!ok) throw 'Could not launch';
-    ref.read(linkRepositoryProvider).updateLastOpened(linkId);
-  } catch (_) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot open link')));
-    }
-  }
+  context.push('/reader', extra: {'url': rawUrl, 'linkId': linkId});
 }

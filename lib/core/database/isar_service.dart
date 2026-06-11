@@ -4,6 +4,7 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../data/models/collection_model.dart';
+import '../../data/models/Highlight/highlight_model.dart';
 import '../../data/models/Link/link_model.dart';
 import '../../data/models/Tag/tag_model.dart';
 
@@ -21,9 +22,10 @@ class IsarService {
     final dir = await getApplicationDocumentsDirectory();
     // Open Isar database with all schemas (tables)
     return await Isar.open([
-      LinkModelSchema, // stores links
-      FolderModelSchema, // stores categories
-      TagModelSchema, // stores tags (chips)
+      LinkModelSchema,
+      FolderModelSchema,
+      TagModelSchema,
+      HighlightModelSchema,
     ], directory: dir.path);
   }
 }

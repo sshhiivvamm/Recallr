@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../data/models/Link/link_model.dart';
+import '../../../../data/models/Tag/tag_model.dart';
+import '../../../../data/models/collection_model.dart';
 
 class LinkRepository {
   final Isar isar;
@@ -28,6 +31,7 @@ class LinkRepository {
       final link = await isar.linkModels.get(id);
       if (link != null) {
         link.isFavorite = !link.isFavorite;
+        link.updatedAt = DateTime.now();
         await isar.linkModels.put(link);
       }
     });
@@ -38,6 +42,7 @@ class LinkRepository {
       final link = await isar.linkModels.get(id);
       if (link != null) {
         link.isRead = !link.isRead;
+        link.updatedAt = DateTime.now();
         await isar.linkModels.put(link);
       }
     });
@@ -46,6 +51,49 @@ class LinkRepository {
   Future<void> deleteLink(int id) async {
     await isar.writeTxn(() async {
       await isar.linkModels.delete(id);
+    });
+    // Clean up all SharedPreferences keys associated with this link
+    final prefs = await SharedPreferences.getInstance();
+    await Future.wait([
+      prefs.remove('sm2_$id'),
+      prefs.remove('health_$id'),
+      prefs.remove('health_ts_$id'),
+    ]);
+  }
+
+  Future<void> updateLink(int id, {String? title, String? notes}) async {
+    await isar.writeTxn(() async {
+      final link = await isar.linkModels.get(id);
+      if (link == null) return;
+      if (title != null && title.isNotEmpty) link.title = title;
+      link.notes = notes?.isEmpty == true ? null : notes;
+      link.updatedAt = DateTime.now();
+      await isar.linkModels.put(link);
+    });
+  }
+
+  Future<void> setTags(int linkId, List<TagModel> tags) async {
+    await isar.writeTxn(() async {
+      final link = await isar.linkModels.get(linkId);
+      if (link == null) return;
+      await link.tags.load();
+      link.tags.clear();
+      link.tags.addAll(tags);
+      link.updatedAt = DateTime.now();
+      await link.tags.save();
+      await isar.linkModels.put(link);
+    });
+  }
+
+  Future<void> setFolder(int linkId, FolderModel? folder) async {
+    await isar.writeTxn(() async {
+      final link = await isar.linkModels.get(linkId);
+      if (link == null) return;
+      await link.folder.load();
+      link.folder.value = folder;
+      link.updatedAt = DateTime.now();
+      await link.folder.save();
+      await isar.linkModels.put(link);
     });
   }
 
@@ -69,6 +117,21 @@ class LinkRepository {
       final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
       final weekStart = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
       return links.where((link) => link.createdAt.isAfter(weekStart)).length;
+    });
+  }
+
+  Stream<List<int>> watchThisWeekDailyCounts() {
+    return isar.linkModels.where().watch(fireImmediately: true).map((links) {
+      final now = DateTime.now();
+      final monday = now.subtract(Duration(days: now.weekday - 1));
+      final mondayDate = DateTime(monday.year, monday.month, monday.day);
+      final counts = List.filled(7, 0);
+      for (final link in links) {
+        final d = link.createdAt;
+        final diff = DateTime(d.year, d.month, d.day).difference(mondayDate).inDays;
+        if (diff >= 0 && diff < 7) counts[diff]++;
+      }
+      return counts;
     });
   }
 
@@ -118,5 +181,33 @@ class LinkRepository {
     final links = await isar.linkModels.where().findAll();
     await Future.wait(links.map((l) => l.tags.load()));
     return links;
+  }
+
+  // Returns the highest-scored unread link using:
+  // score = days_since_saved × (2 if never opened, 1 otherwise)
+  Future<LinkModel?> getNextRead() async {
+    final all = await isar.linkModels.where().findAll();
+    if (all.isEmpty) return null;
+
+    final now = DateTime.now();
+    LinkModel? best;
+    double bestScore = -1;
+
+    for (final link in all) {
+      if (link.isRead) continue;
+      final days = now.difference(link.createdAt).inHours / 24.0;
+      final multiplier = link.lastOpenedAt == null ? 2.0 : 1.0;
+      final score = days * multiplier;
+      if (score > bestScore) {
+        bestScore = score;
+        best = link;
+      }
+    }
+
+    if (best != null) {
+      await best.tags.load();
+      await best.folder.load();
+    }
+    return best;
   }
 }

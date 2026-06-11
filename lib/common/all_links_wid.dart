@@ -1,349 +1,492 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:recallr/theme/recallr_colors.dart';
 
-import '../core/repositrories/link_providers/link_repository_provider.dart';
-import '../core/services/link_health_service.dart';
+import '../data/models/Link/link_model.dart';
+import 'link_options_sheet.dart';
+
+// ── Reading time helper ───────────────────────────────────────────────────────
 
 String readingTimeLabel(String title, String? description) {
   final text = '$title ${description ?? ''}';
-  final words = text.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+  final words =
+      text.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
   final minutes = (words / 200).ceil();
   if (minutes <= 1) return '< 1 min';
   return '$minutes min';
 }
 
-final _healthProvider = FutureProvider.family<bool?, int>((ref, linkId) async {
-  return LinkHealthService.instance.getCachedStatus(linkId);
-});
+// ── LinkCard ──────────────────────────────────────────────────────────────────
 
-void showLinkActions({
-  required BuildContext context,
-  required dynamic link,
-  required dynamic c,
-}) {
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: c.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
-    builder: (_) => _ActionSheet(link: link, c: c),
-  );
-}
-
-class _ActionSheet extends ConsumerWidget {
-  final dynamic link;
-  final dynamic c;
-
-  const _ActionSheet({required this.link, required this.c});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _tile(
-            icon: link.isFavorite
-                ? Icons.bookmark_remove_outlined
-                : Icons.bookmark_rounded,
-            label: link.isFavorite ? 'Remove Favorite' : 'Mark Favorite',
-            onTap: () async {
-              Navigator.pop(context);
-              await ref.read(linkRepositoryProvider).toggleFavorite(link.id);
-            },
-          ),
-          _tile(
-            icon: link.isRead
-                ? Icons.radio_button_unchecked_rounded
-                : Icons.check_circle_outline,
-            label: link.isRead ? 'Mark as Unread' : 'Mark as Read',
-            onTap: () async {
-              Navigator.pop(context);
-              await ref.read(linkRepositoryProvider).toggleRead(link.id);
-            },
-          ),
-          _tile(
-            icon: Icons.delete_outline,
-            label: 'Delete',
-            isDanger: true,
-            onTap: () async {
-              Navigator.pop(context);
-              await ref.read(linkRepositoryProvider).deleteLink(link.id);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _tile({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    bool isDanger = false,
-  }) {
-    return ListTile(
-      leading: Icon(icon, color: isDanger ? Colors.red : null),
-      title: Text(label, style: TextStyle(color: isDanger ? Colors.red : null)),
-      onTap: onTap,
-    );
-  }
-}
-
-class LinkCard extends ConsumerWidget {
-  final dynamic link;
-  final dynamic c;
-  final TextTheme theme;
+class LinkCard extends ConsumerStatefulWidget {
+  final LinkModel link;
   final VoidCallback onTap;
 
   const LinkCard({
     super.key,
     required this.link,
-    required this.c,
-    required this.theme,
     required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final healthAsync = ref.watch(_healthProvider(link.id as int));
-    final isDead = healthAsync.maybeWhen(data: (v) => v == false, orElse: () => false);
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDead ? Colors.red.withValues(alpha: 0.4) : c.border,
-            width: isDead ? 1.0 : 0.5,
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _favicon(),
-            const SizedBox(width: 12),
-
-            Expanded(child: _content(context, isDead)),
-
-            const SizedBox(width: 6),
-
-            _moreButton(context),
-            _thumbnail(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _moreButton(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(6),
-      onTap: () =>
-          showLinkActions(context: context, link: link, c: c),
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: Icon(
-          Icons.more_horiz,
-          size: 18,
-          color: c.textSecondary,
-        ),
-      ),
-    );
-  }
-
-  Widget _favicon() => Container(
-    width: 32,
-    height: 32,
-    decoration: BoxDecoration(
-      color: c.surfaceElevated,
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(7),
-      child: Image.network(
-        link.favicon ?? '',
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) =>
-            Icon(Icons.link, size: 14, color: c.textHint),
-      ),
-    ),
-  );
-
-  Widget _content(BuildContext context, bool isDead) {
-    final readTime = readingTimeLabel(link.title ?? '', link.description as String?);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                link.title ?? '',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.titleSmall!.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: c.textPrimary,
-                ),
-              ),
-            ),
-            if (isDead)
-              Padding(
-                padding: const EdgeInsets.only(left: 4),
-                child: Icon(Icons.wifi_off_rounded, size: 13, color: Colors.red.shade400),
-              )
-            else if (link.isFavorite == true)
-              Icon(Icons.bookmark_rounded, size: 14, color: c.accent),
-          ],
-        ),
-
-        const SizedBox(height: 4),
-
-        Text(
-          link.domain ?? '',
-          style: theme.bodySmall!.copyWith(color: c.textHint),
-        ),
-
-        const SizedBox(height: 8),
-
-        Row(
-          children: [
-            if (link.tags.isNotEmpty)
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: c.accentDim,
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: Text(
-                    link.tags.first.name.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.labelSmall!.copyWith(
-                      color: c.accent,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-
-            if (link.tags.isNotEmpty) const SizedBox(width: 6),
-
-            // Reading time badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-              decoration: BoxDecoration(
-                color: c.surfaceElevated,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: c.borderSoft, width: 0.5),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.schedule_rounded, size: 9, color: c.textHint),
-                  const SizedBox(width: 3),
-                  Text(
-                    readTime,
-                    style: theme.labelSmall!.copyWith(
-                      color: c.textHint,
-                      fontSize: 9,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const Spacer(),
-
-            Text(
-              DateFormat.MMMd().format(link.createdAt),
-              style: theme.bodySmall!.copyWith(color: c.textHint),
-            ),
-
-            const SizedBox(width: 6),
-          ],
-        )
-      ],
-    );
-  }
-
-  Widget _thumbnail() {
-    if (link.thumbnail == null || link.thumbnail.isEmpty) {
-      return const SizedBox();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.network(
-          link.thumbnail!,
-          width: 60,
-          height: 60,
-          fit: BoxFit.cover,
-        ),
-      ),
-    );
-  }
+  ConsumerState<LinkCard> createState() => _LinkCardState();
 }
 
+class _LinkCardState extends ConsumerState<LinkCard> {
+  bool _pressed = false;
 
-class CompactRow extends StatelessWidget {
-  final dynamic link;
-  final dynamic c;
-  final TextTheme theme;
-  final VoidCallback onTap;
-
-  const CompactRow({
-    super.key,
-    required this.link,
-    required this.c,
-    required this.theme,
-    required this.onTap,
-  });
+  int get _readTime {
+    final words =
+        '${widget.link.title} ${widget.link.description ?? ''}'
+            .split(RegExp(r'\s+'))
+            .where((w) => w.isNotEmpty)
+            .length;
+    return (words / 200).ceil().clamp(1, 99);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            Image.network(link.favicon ?? '', width: 24, height: 24,
-                errorBuilder: (_, __, ___) =>
-                    Icon(Icons.link, size: 14, color: c.textHint)),
+    final c = context.colors;
+    final theme = Theme.of(context).textTheme;
+    final link = widget.link;
 
-            const SizedBox(width: 10),
+    return Listener(
+      onPointerDown: (_) => setState(() => _pressed = true),
+      onPointerUp: (_) => setState(() => _pressed = false),
+      onPointerCancel: (_) => setState(() => _pressed = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _pressed ? 0.972 : 1.0,
+          duration: const Duration(milliseconds: 100),
+          curve: Curves.easeOut,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _pressed ? c.surfaceElevated : c.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _pressed ? c.accentBorder : c.border,
+                width: _pressed ? 1.0 : 0.5,
+              ),
+              boxShadow: _pressed
+                  ? []
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+            ),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Left accent bar
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    width: 3,
+                    margin: const EdgeInsets.only(right: 12),
+                    decoration: BoxDecoration(
+                      color: link.isRead ? c.border : c.accent,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
 
-            Expanded(
-              child: Text(
-                link.title ?? '',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                  // Content
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Favicon + title + bookmark
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: c.surfaceElevated,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color: c.borderSoft, width: 0.5),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(7),
+                                    child: CachedNetworkImage(
+                                      imageUrl: link.favicon ?? '',
+                                      fit: BoxFit.cover,
+                                      errorWidget: (ctx, url, e) => Icon(
+                                        Icons.link_rounded,
+                                        size: 14,
+                                        color: c.textHint,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (!link.isRead)
+                                  Positioned(
+                                    top: -2,
+                                    right: -2,
+                                    child: Container(
+                                      width: 9,
+                                      height: 9,
+                                      decoration: BoxDecoration(
+                                        color: c.accent,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                            color: c.surface, width: 1.5),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                link.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.titleSmall!.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: link.isRead
+                                      ? c.textSecondary
+                                      : c.textPrimary,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                            if (link.isFavorite) ...[
+                              const SizedBox(width: 6),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 1),
+                                child: Icon(Icons.bookmark_rounded,
+                                    size: 13, color: c.amber),
+                              ),
+                            ],
+                          ],
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        // Domain + tag
+                        Row(
+                          children: [
+                            Icon(Icons.language_rounded,
+                                size: 10, color: c.textHint),
+                            const SizedBox(width: 3),
+                            Expanded(
+                              child: Text(
+                                link.domain ?? '',
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.bodySmall!.copyWith(
+                                    color: c.textHint, fontSize: 11),
+                              ),
+                            ),
+                            if (link.tags.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: c.accentDim,
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: Text(
+                                  link.tags.first.name.toUpperCase(),
+                                  style: theme.labelSmall!.copyWith(
+                                    color: c.accent,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 9,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+
+                        // Description
+                        if ((link.description ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 5),
+                          Text(
+                            link.description!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.bodySmall!.copyWith(
+                              color: c.textSecondary,
+                              fontSize: 12,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 10),
+
+                        // Footer
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_today_outlined,
+                                size: 10, color: c.textHint),
+                            const SizedBox(width: 3),
+                            Text(
+                              DateFormat.MMMd().format(link.createdAt),
+                              style: theme.bodySmall!
+                                  .copyWith(color: c.textHint, fontSize: 10),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(Icons.schedule_rounded,
+                                size: 10, color: c.textHint),
+                            const SizedBox(width: 3),
+                            Text(
+                              '$_readTime min',
+                              style: theme.bodySmall!
+                                  .copyWith(color: c.textHint, fontSize: 10),
+                            ),
+                            const Spacer(),
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () =>
+                                  showLinkOptions(context, ref, link),
+                              child: Container(
+                                padding: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  color: c.surfaceElevated,
+                                  borderRadius: BorderRadius.circular(7),
+                                  border: Border.all(
+                                      color: c.border, width: 0.5),
+                                ),
+                                child: Icon(Icons.more_horiz_rounded,
+                                    size: 14, color: c.textSecondary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Thumbnail
+                  if (link.thumbnail != null &&
+                      link.thumbnail!.isNotEmpty) ...[
+                    const SizedBox(width: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: CachedNetworkImage(
+                        imageUrl: link.thumbnail!,
+                        height: 76,
+                        width: 76,
+                        fit: BoxFit.cover,
+                        errorWidget: (ctx, url, e) => const SizedBox(),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-            Text(DateFormat.MMMd().format(link.createdAt)),
-            IconButton(
-              icon: const Icon(Icons.more_horiz, size: 16),
-              onPressed: () =>
-                  showLinkActions(context: context, link: link, c: c),
-            )
+// ── CompactRow ────────────────────────────────────────────────────────────────
+
+class CompactRow extends ConsumerStatefulWidget {
+  final LinkModel link;
+  final VoidCallback onTap;
+
+  const CompactRow({super.key, required this.link, required this.onTap});
+
+  @override
+  ConsumerState<CompactRow> createState() => _CompactRowState();
+}
+
+class _CompactRowState extends ConsumerState<CompactRow> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final theme = Theme.of(context).textTheme;
+    final link = widget.link;
+
+    return Listener(
+      onPointerDown: (_) => setState(() => _pressed = true),
+      onPointerUp: (_) => setState(() => _pressed = false),
+      onPointerCancel: (_) => setState(() => _pressed = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          color: _pressed ? c.surfaceElevated : Colors.transparent,
+          child: Row(
+            children: [
+              // Favicon with unread dot
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: c.surfaceElevated,
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: CachedNetworkImage(
+                        imageUrl: link.favicon ?? '',
+                        fit: BoxFit.cover,
+                        errorWidget: (ctx, url, e) =>
+                            Icon(Icons.link_rounded, size: 12, color: c.textHint),
+                      ),
+                    ),
+                  ),
+                  if (!link.isRead)
+                    Positioned(
+                      top: -2,
+                      right: -2,
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: c.accent,
+                          shape: BoxShape.circle,
+                          border:
+                              Border.all(color: c.background, width: 1.5),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 10),
+
+              // Title
+              Expanded(
+                child: Text(
+                  link.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.bodyMedium!.copyWith(
+                    color:
+                        link.isRead ? c.textSecondary : c.textPrimary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+
+              // Date + bookmark
+              if (link.isFavorite)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Icon(Icons.bookmark_rounded,
+                      size: 12, color: c.amber),
+                ),
+              Text(
+                DateFormat.MMMd().format(link.createdAt),
+                style: theme.bodySmall!
+                    .copyWith(color: c.textHint, fontSize: 11),
+              ),
+              const SizedBox(width: 4),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => showLinkOptions(context, ref, link),
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(Icons.more_horiz_rounded,
+                      size: 16, color: c.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+// ── LinkSkeletonCard ──────────────────────────────────────────────────────────────
+
+class LinkSkeletonCard extends StatelessWidget {
+  final dynamic c;
+
+  const LinkSkeletonCard({super.key, required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border, width: 0.5),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Bone(width: 3, height: double.infinity, radius: 2, c: c),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _Bone(width: 32, height: 32, radius: 8, c: c),
+                      const SizedBox(width: 10),
+                      Expanded(
+                          child: _Bone(
+                              width: double.infinity, height: 13, radius: 4, c: c)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _Bone(width: 120, height: 10, radius: 4, c: c),
+                  const SizedBox(height: 8),
+                  _Bone(width: double.infinity, height: 10, radius: 4, c: c),
+                  const SizedBox(height: 4),
+                  _Bone(width: 180, height: 10, radius: 4, c: c),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 }
+
+class _Bone extends StatelessWidget {
+  final double width, height, radius;
+  final dynamic c;
+
+  const _Bone(
+      {required this.width,
+      required this.height,
+      required this.radius,
+      required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: c.surfaceElevated,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+}
+
