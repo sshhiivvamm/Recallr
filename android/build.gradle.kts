@@ -17,18 +17,25 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(":app")
+    if (project.name != "app") {
+        afterEvaluate {
+            extensions.findByType<com.android.build.gradle.LibraryExtension>()?.apply {
+                if (project.name == "isar_flutter_libs" && namespace == null) {
+                    namespace = "dev.isar.isar_flutter_libs"
+                }
+                compileSdk = 36
+                compileOptions {
+                    sourceCompatibility = JavaVersion.VERSION_21
+                    targetCompatibility = JavaVersion.VERSION_21
+                }
+            }
+            tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+                compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21) }
+            }
+        }
+    }
 }
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
-}
-
-subprojects {
-    plugins.withId("com.android.library") {
-        extensions.findByType<com.android.build.gradle.LibraryExtension>()?.apply {
-            if (project.name == "isar_flutter_libs" && namespace == null) {
-                namespace = "dev.isar.isar_flutter_libs"
-            }
-        }
-    }
 }

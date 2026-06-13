@@ -227,10 +227,32 @@ class _CategoryBodyState extends ConsumerState<_CategoryBody> {
     return fallback[tag.id % fallback.length];
   }
 
+  static final _cpMap = <int, IconData>{
+    Icons.code_rounded.codePoint:            Icons.code_rounded,
+    Icons.book_rounded.codePoint:            Icons.book_rounded,
+    Icons.school_rounded.codePoint:          Icons.school_rounded,
+    Icons.work_rounded.codePoint:            Icons.work_rounded,
+    Icons.favorite_rounded.codePoint:        Icons.favorite_rounded,
+    Icons.star_rounded.codePoint:            Icons.star_rounded,
+    Icons.lightbulb_rounded.codePoint:       Icons.lightbulb_rounded,
+    Icons.sports_esports_rounded.codePoint:  Icons.sports_esports_rounded,
+    Icons.science_rounded.codePoint:         Icons.science_rounded,
+    Icons.palette_rounded.codePoint:         Icons.palette_rounded,
+    Icons.music_note_rounded.codePoint:      Icons.music_note_rounded,
+    Icons.trending_up_rounded.codePoint:     Icons.trending_up_rounded,
+    Icons.design_services_rounded.codePoint: Icons.design_services_rounded,
+    Icons.menu_book_rounded.codePoint:       Icons.menu_book_rounded,
+    Icons.play_circle_rounded.codePoint:     Icons.play_circle_rounded,
+    Icons.article_rounded.codePoint:         Icons.article_rounded,
+    Icons.people_rounded.codePoint:          Icons.people_rounded,
+    Icons.build_rounded.codePoint:           Icons.build_rounded,
+    Icons.folder_rounded.codePoint:          Icons.folder_rounded,
+  };
+
   static IconData _resolveIcon(String? iconStr) {
     if (iconStr == null) return Icons.folder_rounded;
     final cp = int.tryParse(iconStr);
-    if (cp != null) return IconData(cp, fontFamily: 'MaterialIcons');
+    if (cp != null) return _cpMap[cp] ?? Icons.folder_rounded;
     const map = {
       'code':    Icons.code_rounded,
       'study':   Icons.school_rounded,
@@ -561,10 +583,32 @@ class _PinnedCardState extends State<_PinnedCard> {
     return _fallbackColors[tag.id % _fallbackColors.length];
   }
 
+  static final _cpMap = <int, IconData>{
+    Icons.code_rounded.codePoint:            Icons.code_rounded,
+    Icons.book_rounded.codePoint:            Icons.book_rounded,
+    Icons.school_rounded.codePoint:          Icons.school_rounded,
+    Icons.work_rounded.codePoint:            Icons.work_rounded,
+    Icons.favorite_rounded.codePoint:        Icons.favorite_rounded,
+    Icons.star_rounded.codePoint:            Icons.star_rounded,
+    Icons.lightbulb_rounded.codePoint:       Icons.lightbulb_rounded,
+    Icons.sports_esports_rounded.codePoint:  Icons.sports_esports_rounded,
+    Icons.science_rounded.codePoint:         Icons.science_rounded,
+    Icons.palette_rounded.codePoint:         Icons.palette_rounded,
+    Icons.music_note_rounded.codePoint:      Icons.music_note_rounded,
+    Icons.trending_up_rounded.codePoint:     Icons.trending_up_rounded,
+    Icons.design_services_rounded.codePoint: Icons.design_services_rounded,
+    Icons.menu_book_rounded.codePoint:       Icons.menu_book_rounded,
+    Icons.play_circle_rounded.codePoint:     Icons.play_circle_rounded,
+    Icons.article_rounded.codePoint:         Icons.article_rounded,
+    Icons.people_rounded.codePoint:          Icons.people_rounded,
+    Icons.build_rounded.codePoint:           Icons.build_rounded,
+    Icons.folder_rounded.codePoint:          Icons.folder_rounded,
+  };
+
   static IconData _resolveIcon(String? iconStr) {
     if (iconStr == null) return Icons.folder_rounded;
     final cp = int.tryParse(iconStr);
-    if (cp != null) return IconData(cp, fontFamily: 'MaterialIcons');
+    if (cp != null) return _cpMap[cp] ?? Icons.folder_rounded;
     const map = {
       'code':    Icons.code_rounded,
       'study':   Icons.school_rounded,
