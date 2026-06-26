@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:recallr/common/widgets.dart';
 import 'package:recallr/core/services/share_intent_service.dart';
-import 'package:recallr/main.dart' show pendingSharedUrl;
 import 'package:recallr/theme/recallr_colors.dart';
 
 class MainNavigation extends StatefulWidget {
@@ -21,14 +20,9 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   void initState() {
     super.initState();
+    // Cold-start share intents are handled by the /share-intent route.
+    // Here we only subscribe to the foreground/background stream.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Handle URL that launched the app via share intent (cold-start)
-      if (pendingSharedUrl != null) {
-        final url = pendingSharedUrl!;
-        pendingSharedUrl = null;
-        if (mounted) ReWid.openSaveSheet(context, initialUrl: url);
-      }
-      // Handle URLs shared while the app is already running
       _shareSubscription = ShareIntentService.urlStream.listen((url) {
         if (mounted) ReWid.openSaveSheet(context, initialUrl: url);
       });

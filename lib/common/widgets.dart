@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:metadata_fetch/metadata_fetch.dart';
@@ -62,6 +63,7 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
 
   bool _fetchingMeta = false;
   bool _saving = false;
+  bool _saveSuccess = false;
   Metadata? _meta;
   String? _domain;
   TagModel? _selectedTag;
@@ -196,7 +198,9 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
       });
 
       if (!mounted) return;
-      Navigator.of(context).pop();
+      setState(() => _saveSuccess = true);
+      await Future.delayed(const Duration(milliseconds: 1400));
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -231,6 +235,52 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
     final c = context.colors;
     final theme = Theme.of(context).textTheme;
     final kb = MediaQuery.of(context).viewInsets.bottom;
+
+    // ── Save success overlay ──────────────────────────────────────────────────
+    if (_saveSuccess) {
+      return Container(
+        decoration: BoxDecoration(
+          color: c.background,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                  color: c.borderSoft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Lottie.asset(
+              'assets/animations/success.json',
+              width: 140,
+              height: 140,
+              repeat: false,
+              fit: BoxFit.contain,
+            ),
+            Text(
+              'Saved to Vault!',
+              style: theme.titleMedium!.copyWith(
+                fontWeight: FontWeight.w700,
+                color: c.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Link added to your collection',
+              style: theme.bodySmall!.copyWith(color: c.textHint),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      );
+    }
 
     return Container(
       decoration: BoxDecoration(

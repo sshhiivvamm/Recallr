@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -340,6 +341,38 @@ class _Body extends ConsumerWidget {
   }
 }
 
+// ── Unsplash cover URL ────────────────────────────────────────────────────────
+
+String _unsplashCoverUrl(String name, int id) {
+  final lower = name.toLowerCase();
+  final String kw;
+  if (lower.contains('tech') || lower.contains('code') || lower.contains('dev') || lower.contains('programm')) {
+    kw = 'technology,programming';
+  } else if (lower.contains('design') || lower.contains('art') || lower.contains('ui') || lower.contains('creative')) {
+    kw = 'design,art';
+  } else if (lower.contains('health') || lower.contains('fitness') || lower.contains('wellness')) {
+    kw = 'health,wellness';
+  } else if (lower.contains('business') || lower.contains('finance') || lower.contains('money')) {
+    kw = 'business,finance';
+  } else if (lower.contains('science') || lower.contains('research')) {
+    kw = 'science,research';
+  } else if (lower.contains('book') || lower.contains('learn') || lower.contains('educat') || lower.contains('read')) {
+    kw = 'books,education';
+  } else if (lower.contains('food') || lower.contains('cook') || lower.contains('recipe')) {
+    kw = 'food,cooking';
+  } else if (lower.contains('travel') || lower.contains('trip') || lower.contains('adventure')) {
+    kw = 'travel,adventure';
+  } else if (lower.contains('music') || lower.contains('audio') || lower.contains('podcast')) {
+    kw = 'music,audio';
+  } else if (lower.contains('nature') || lower.contains('outdoor') || lower.contains('environment')) {
+    kw = 'nature,landscape';
+  } else {
+    kw = Uri.encodeComponent(name.isEmpty ? 'minimal,abstract' : name);
+  }
+  // Use folder id as a seed for variety across collections with the same keyword
+  return 'https://source.unsplash.com/featured/400x200/?$kw&sig=$id';
+}
+
 // ── Folder Card ───────────────────────────────────────────────────────────────
 
 class _FolderCard extends StatefulWidget {
@@ -395,7 +428,6 @@ class _FolderCardState extends State<_FolderCard> {
           curve: Curves.easeOut,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: _pressed ? c.surfaceElevated : c.surface,
               borderRadius: BorderRadius.circular(16),
@@ -413,62 +445,108 @@ class _FolderCardState extends State<_FolderCard> {
                       ),
                     ],
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(Icons.folder_rounded,
-                          color: color, size: 20),
-                    ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: widget.onDelete,
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: c.surfaceElevated,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: c.border, width: 0.5),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(15),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Cover image ──────────────────────────────
+                  SizedBox(
+                    height: 88,
+                    width: double.infinity,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CachedNetworkImage(
+                          imageUrl: _unsplashCoverUrl(folder.name, folder.id),
+                          fit: BoxFit.cover,
+                          errorWidget: (ctx, url, e) => Container(
+                            color: color.withValues(alpha: 0.15),
+                          ),
+                          placeholder: (ctx, url) => Container(
+                            color: color.withValues(alpha: 0.08),
+                          ),
                         ),
-                        child: Icon(Icons.close_rounded,
-                            size: 14, color: c.textHint),
+                        // Gradient overlay so text stays legible
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.08),
+                                Colors.black.withValues(alpha: 0.45),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // Delete button
+                        Positioned(
+                          top: 7,
+                          right: 7,
+                          child: GestureDetector(
+                            onTap: widget.onDelete,
+                            child: Container(
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                borderRadius: BorderRadius.circular(7),
+                              ),
+                              child: const Icon(Icons.close_rounded,
+                                  size: 13, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // ── Info section ─────────────────────────────
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Icons.folder_rounded,
+                                color: color, size: 15),
+                          ),
+                          const Spacer(),
+                          Text(
+                            folder.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.labelMedium!.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: c.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Text(
+                                '$linkCount ${linkCount == 1 ? 'link' : 'links'}',
+                                style: theme.labelSmall!
+                                    .copyWith(color: c.textHint, fontSize: 10),
+                              ),
+                              const Spacer(),
+                              Icon(Icons.arrow_outward_rounded,
+                                  size: 12, color: color),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-                const Spacer(),
-                Text(
-                  folder.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.titleSmall!.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: c.textPrimary,
                   ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      '$linkCount ${linkCount == 1 ? 'link' : 'links'}',
-                      style:
-                          theme.labelSmall!.copyWith(color: c.textHint),
-                    ),
-                    const Spacer(),
-                    Icon(Icons.arrow_outward_rounded,
-                        size: 14, color: color),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

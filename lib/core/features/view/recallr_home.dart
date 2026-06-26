@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:go_router/go_router.dart';
 import 'package:recallr/common/link_options_sheet.dart';
 import 'package:recallr/common/sheet_fab.dart';
@@ -61,27 +62,19 @@ class RecallrHome extends ConsumerStatefulWidget {
 
 class _RecallrHomeState extends ConsumerState<RecallrHome> {
   final _ctrl = ScrollController();
-  double _offset = 0;
   int _wordIdx = 0;
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _ctrl.addListener(_onScroll);
     _timer = Timer.periodic(const Duration(milliseconds: 2500), (_) {
       if (mounted) setState(() => _wordIdx = (_wordIdx + 1) % _heroWords.length);
     });
   }
 
-  void _onScroll() {
-    final v = _ctrl.offset.clamp(0.0, double.infinity);
-    if ((v - _offset).abs() > 0.5 && mounted) setState(() => _offset = v);
-  }
-
   @override
   void dispose() {
-    _ctrl.removeListener(_onScroll);
     _ctrl.dispose();
     _timer?.cancel();
     super.dispose();
@@ -90,9 +83,6 @@ class _RecallrHomeState extends ConsumerState<RecallrHome> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final collapseT  = (_offset / 100.0).clamp(0.0, 1.0);
-    final subtitleT  = ((_offset - 60.0) / 50.0).clamp(0.0, 1.0);
-    final subtitleH  = subtitleT * 46.0;
 
     return SheetFabHost(
       heroTag: 'home_fab',
@@ -114,7 +104,10 @@ class _RecallrHomeState extends ConsumerState<RecallrHome> {
                 color: c.background,
                 child: CustomScrollView(
                 controller: _ctrl,
-                physics: const BouncingScrollPhysics(),
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                cacheExtent: 300,
                 slivers: [
                   // ── Pinned top bar ───────────────────────────────
                   SliverAppBar(
@@ -127,71 +120,6 @@ class _RecallrHomeState extends ConsumerState<RecallrHome> {
                     automaticallyImplyLeading: false,
                     toolbarHeight: 52,
                     titleSpacing: 16,
-                    // Sticky subtitle: "Your Mind, [word]" fades in as hero scrolls away
-                    bottom: PreferredSize(
-                      preferredSize: Size.fromHeight(subtitleH),
-                      child: SizedBox(
-                        height: subtitleH,
-                        child: ClipRect(
-                        child: OverflowBox(
-                          maxHeight: 46.0,
-                          alignment: Alignment.topLeft,
-                          child: Opacity(
-                        opacity: subtitleT,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                'Your Mind, ',
-                                style: Theme.of(context).textTheme.displayLarge!.copyWith(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: -0.6,
-                                  height: 1.15,
-                                  color: c.textPrimary,
-                                ),
-                              ),
-                              ClipRect(
-                                child: AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 380),
-                                  layoutBuilder: (current, previous) => Stack(
-                                    alignment: Alignment.centerLeft,
-                                    clipBehavior: Clip.hardEdge,
-                                    children: [
-                                      ...previous,
-                                      ?current,
-                                    ],
-                                  ),
-                                  transitionBuilder: _wordSlideTransition,
-                                  child: ShaderMask(
-                                    key: ValueKey(_wordIdx),
-                                    shaderCallback: (bounds) =>
-                                        AppColors.brandGradient.createShader(bounds),
-                                    blendMode: BlendMode.srcIn,
-                                    child: Text(
-                                      _heroWords[_wordIdx],
-                                      style: Theme.of(context).textTheme.displayLarge!.copyWith(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: -0.6,
-                                        height: 1.15,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                        ),
-                        ),
-                      ),
-                    ),
                     title: Row(
                       children: [
                         Container(
@@ -269,13 +197,15 @@ class _RecallrHomeState extends ConsumerState<RecallrHome> {
                     ),
                   ),
 
-                  // ── Hero ────────────────────────────────────────
+                  // ── Hero title: shrinks and sticks on scroll ─────
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _HeroTitleDelegate(wordIdx: _wordIdx, c: c),
+                  ),
+
+                  // ── Hero stats ──────────────────────────────────
                   SliverToBoxAdapter(
-                    child: _HeroSection(
-                      c: c,
-                      collapseT: collapseT,
-                      wordIdx: _wordIdx,
-                    ),
+                    child: _HeroSection(c: c),
                   ),
 
                   // ── Spotlight carousel ───────────────────────────
@@ -349,6 +279,7 @@ class _RecallrHomeState extends ConsumerState<RecallrHome> {
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
+                            addAutomaticKeepAlives: false,
                             (context, index) {
                               final link = links[index];
                               return Padding(
@@ -438,13 +369,10 @@ class _RecallrHomeState extends ConsumerState<RecallrHome> {
 
 class _HeroSection extends ConsumerWidget {
   final AppColorScheme c;
-  final double collapseT;
-  final int wordIdx;
-  const _HeroSection({required this.c, required this.collapseT, required this.wordIdx});
+  const _HeroSection({required this.c});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context).textTheme;
     final totalLinks = ref.watch(totalLinksCountProvider);
     final thisWeekLinks = ref.watch(thisWeekLinksCountProvider);
     final streakAsync = ref.watch(readingStreakProvider);
@@ -459,7 +387,6 @@ class _HeroSection extends ConsumerWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // ── Background glow orbs ────────────────
         Positioned(
           top: -50,
           right: -70,
@@ -470,70 +397,11 @@ class _HeroSection extends ConsumerWidget {
           right: 40,
           child: _GlowOrb(color: c.purple, size: 120),
         ),
-
-        // ── Content ─────────────────────────────
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Headline fades + lifts as user scrolls past it
-              Opacity(
-                opacity: (1.0 - collapseT * 2.0).clamp(0.0, 1.0),
-                child: Transform.translate(
-                  offset: Offset(0, -18 * collapseT),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Your Mind,',
-                        style: theme.displayLarge!.copyWith(
-                          fontSize: 38,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.8,
-                          height: 1.1,
-                          color: c.textPrimary,
-                        ),
-                      ),
-                      // Word-swap animation — slides up, stays left-aligned
-                      ClipRect(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 450),
-                          layoutBuilder: (current, previous) => Stack(
-                            alignment: Alignment.topLeft,
-                            clipBehavior: Clip.hardEdge,
-                            children: [
-                              ...previous,
-                              ?current,
-                            ],
-                          ),
-                          transitionBuilder: _wordSlideTransition,
-                          child: ShaderMask(
-                            key: ValueKey(wordIdx),
-                            shaderCallback: (bounds) =>
-                                AppColors.brandGradient.createShader(bounds),
-                            blendMode: BlendMode.srcIn,
-                            child: Text(
-                              _heroWords[wordIdx],
-                              style: theme.displayLarge!.copyWith(
-                                fontSize: 38,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.8,
-                                height: 1.1,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // ── Stat tiles ──────────────────────
               Row(
                 children: [
                   _StatTile(
@@ -564,7 +432,6 @@ class _HeroSection extends ConsumerWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 20),
             ],
           ),
@@ -572,6 +439,132 @@ class _HeroSection extends ConsumerWidget {
       ],
     );
   }
+}
+
+// ── Hero Title Delegate ───────────────────────────────────────────────────────
+
+class _HeroTitleDelegate extends SliverPersistentHeaderDelegate {
+  final int wordIdx;
+  final AppColorScheme c;
+
+  const _HeroTitleDelegate({required this.wordIdx, required this.c});
+
+  @override
+  double get minExtent => 50.0;
+
+  @override
+  double get maxExtent => 108.0;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final t = (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0);
+    final expandedOpacity = (1.0 - t * 2.2).clamp(0.0, 1.0);
+    final collapsedOpacity = ((t - 0.55) / 0.45).clamp(0.0, 1.0);
+    final theme = Theme.of(context).textTheme;
+
+    final expandedTextStyle = theme.displayLarge!.copyWith(
+      fontSize: 38,
+      fontWeight: FontWeight.w900,
+      letterSpacing: -0.8,
+      height: 1.1,
+      color: c.textPrimary,
+    );
+    final collapsedTextStyle = theme.displayLarge!.copyWith(
+      fontSize: 22,
+      fontWeight: FontWeight.w900,
+      letterSpacing: -0.6,
+      height: 1.15,
+      color: c.textPrimary,
+    );
+
+    return ColoredBox(
+      color: c.background,
+      child: Stack(
+        children: [
+          // Two-line expanded layout
+          if (expandedOpacity > 0)
+            Positioned.fill(
+              child: Opacity(
+                opacity: expandedOpacity,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('Your Mind,', style: expandedTextStyle),
+                      ClipRect(
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 450),
+                          layoutBuilder: (current, previous) => Stack(
+                            alignment: Alignment.topLeft,
+                            clipBehavior: Clip.hardEdge,
+                            children: [...previous, ?current],
+                          ),
+                          transitionBuilder: _wordSlideTransition,
+                          child: ShaderMask(
+                            key: ValueKey('exp-$wordIdx'),
+                            shaderCallback: (bounds) =>
+                                AppColors.brandGradient.createShader(bounds),
+                            blendMode: BlendMode.srcIn,
+                            child: Text(
+                              _heroWords[wordIdx],
+                              style: expandedTextStyle.copyWith(color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          // Single-line collapsed layout
+          if (collapsedOpacity > 0)
+            Positioned.fill(
+              child: Opacity(
+                opacity: collapsedOpacity,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text('Your Mind, ', style: collapsedTextStyle),
+                      ClipRect(
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 380),
+                          layoutBuilder: (current, previous) => Stack(
+                            alignment: Alignment.centerLeft,
+                            clipBehavior: Clip.hardEdge,
+                            children: [...previous, ?current],
+                          ),
+                          transitionBuilder: _wordSlideTransition,
+                          child: ShaderMask(
+                            key: ValueKey('col-$wordIdx'),
+                            shaderCallback: (bounds) =>
+                                AppColors.brandGradient.createShader(bounds),
+                            blendMode: BlendMode.srcIn,
+                            child: Text(
+                              _heroWords[wordIdx],
+                              style: collapsedTextStyle.copyWith(color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(_HeroTitleDelegate old) =>
+      old.wordIdx != wordIdx || old.c != c;
 }
 
 // ── Spotlight Carousel ────────────────────────────────────────────────────────
@@ -1439,29 +1432,18 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 40, 16, 40),
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 40),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  c.accentDim,
-                  c.purpleDim,
-                ],
-              ),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: c.accentBorder, width: 0.8),
-            ),
-            child: Icon(Icons.bookmark_add_outlined,
-                color: c.accent, size: 28),
+          Lottie.asset(
+            'assets/animations/empty_bookmark.json',
+            width: 180,
+            height: 180,
+            repeat: true,
+            fit: BoxFit.contain,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 4),
           Text(
             'Nothing saved yet',
             style: theme.titleMedium!.copyWith(

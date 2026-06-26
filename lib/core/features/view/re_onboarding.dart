@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -547,12 +548,19 @@ class _Illustration extends StatelessWidget {
   final double pageOffset;
 
   @override
-  Widget build(BuildContext context) => switch (type) {
-    _IllType.welcome    => _WelcomeIll(idleAnim: idleAnim, pulseAnim: pulseAnim, pageOffset: pageOffset),
-    _IllType.save       => _SaveIll(idleAnim: idleAnim),
-    _IllType.organize   => _OrganizeIll(idleAnim: idleAnim),
-    _IllType.rediscover => _RediscoverIll(idleAnim: idleAnim, pulseAnim: pulseAnim),
-  };
+  Widget build(BuildContext context) {
+    final asset = switch (type) {
+      _IllType.welcome    => 'assets/animations/onboard_welcome.json',
+      _IllType.save       => 'assets/animations/onboard_save.json',
+      _IllType.organize   => 'assets/animations/onboard_organize.json',
+      _IllType.rediscover => 'assets/animations/onboard_discover.json',
+    };
+    return Lottie.asset(
+      asset,
+      repeat: true,
+      fit: BoxFit.contain,
+    );
+  }
 }
 
 // ── Welcome: "R" with orbital dots that react to page swipe ──────────────────

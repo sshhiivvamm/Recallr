@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:lottie/lottie.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -1205,18 +1206,14 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: c.surfaceElevated,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: c.border, width: 0.5),
-            ),
-            child:
-                Icon(Icons.search_off_rounded, color: c.textHint, size: 24),
+          Lottie.asset(
+            'assets/animations/search_empty.json',
+            width: 160,
+            height: 160,
+            repeat: true,
+            fit: BoxFit.contain,
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 4),
           Text(
             'No results found',
             style: theme.titleSmall!

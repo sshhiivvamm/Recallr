@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:flutter/material.dart';
 
+import 'common/widgets.dart';
 import 'core/features/links/all_links.dart';
 import 'core/features/view/re_addcategory.dart';
 import 'core/features/view/re_category.dart';
@@ -15,21 +16,34 @@ import 'core/features/view/re_review.dart';
 import 'core/features/view/re_search.dart';
 import 'core/features/view/recallr_home.dart';
 import 'data/models/collection_model.dart';
+import 'main.dart' show pendingSharedUrl;
 import 'navigation/nav_file.dart';
+import 'theme/recallr_colors.dart';
 
 // Set by main() before runApp — true if user has completed onboarding before.
 bool onboardingDone = false;
 
 class ReNav {
   static final GoRouter router = GoRouter(
-    initialLocation: '/',
+    initialLocation: pendingSharedUrl != null ? '/share-intent' : '/',
     redirect: (context, state) {
-      if (!onboardingDone && state.matchedLocation != '/onboarding') {
+      final loc = state.matchedLocation;
+      // Onboarding takes priority over everything except the share-intent route
+      if (!onboardingDone && loc != '/onboarding' && loc != '/share-intent') {
         return '/onboarding';
       }
       return null;
     },
     routes: [
+      // ── Share-intent entry point ─────────────────────────────────────────
+      // Launched when the app is cold-started via an Android share action.
+      // Shows the save sheet immediately on the first frame — no home-screen
+      // flash — then navigates to '/' once the sheet is dismissed.
+      GoRoute(
+        path: '/share-intent',
+        builder: (context, state) => const _ShareIntentPage(),
+      ),
+
       GoRoute(
         path: '/onboarding',
         name: 'onboarding',
@@ -132,4 +146,35 @@ class ReNav {
       ),
     ],
   );
+}
+
+// ── Share-intent page ─────────────────────────────────────────────────────────
+// Lightweight entry route for cold-start share intents. Renders a branded
+// background so the sheet has something clean behind it, opens the save sheet
+// on the first frame, then hands off to home once the sheet closes.
+
+class _ShareIntentPage extends StatefulWidget {
+  const _ShareIntentPage();
+
+  @override
+  State<_ShareIntentPage> createState() => _ShareIntentPageState();
+}
+
+class _ShareIntentPageState extends State<_ShareIntentPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final url = pendingSharedUrl;
+      pendingSharedUrl = null;
+      await ReWid.openSaveSheet(context, initialUrl: url);
+      if (mounted) context.go('/');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(backgroundColor: context.colors.background);
+  }
 }

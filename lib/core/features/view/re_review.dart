@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -1155,69 +1156,66 @@ class _DoneState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasReviewed = reviewed > 0;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80, height: 80,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: hasReviewed
-                    ? [c.greenDim, c.accentDim]
-                    : [c.purpleDim, c.accentDim],
-              ),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: (hasReviewed ? c.green : c.purple)
-                    .withValues(alpha: 0.30),
-                width: 0.8,
-              ),
-            ),
-            child: Icon(
-              hasReviewed
-                  ? Icons.check_circle_outline_rounded
-                  : Icons.psychology_rounded,
-              size: 36,
-              color: hasReviewed ? c.green : c.purple,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            hasReviewed ? 'Session complete!' : 'All caught up!',
-            style: theme.titleLarge!.copyWith(
-              fontWeight: FontWeight.w800,
-              color: c.textPrimary,
-              fontSize: 22,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            hasReviewed
-                ? 'You reviewed $reviewed ${reviewed == 1 ? 'link' : 'links'}.\nLinks due again will appear tomorrow.'
-                : 'No links are due right now.\nCome back later to keep your streak!',
-            textAlign: TextAlign.center,
-            style: theme.bodySmall!.copyWith(color: c.textHint, height: 1.6),
-          ),
-          const SizedBox(height: 36),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: onClose,
-              icon: const Icon(Icons.home_rounded, size: 16),
-              label: const Text('Back to Home'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+    return Stack(
+      children: [
+        // Confetti overlay — plays once on session complete
+        if (hasReviewed)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Lottie.asset(
+                'assets/animations/confetti.json',
+                repeat: false,
+                fit: BoxFit.cover,
               ),
             ),
           ),
-        ],
-      ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Lottie.asset(
+                'assets/animations/success.json',
+                width: 120,
+                height: 120,
+                repeat: false,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                hasReviewed ? 'Session complete!' : 'All caught up!',
+                style: theme.titleLarge!.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: c.textPrimary,
+                  fontSize: 22,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                hasReviewed
+                    ? 'You reviewed $reviewed ${reviewed == 1 ? 'link' : 'links'}.\nLinks due again will appear tomorrow.'
+                    : 'No links are due right now.\nCome back later to keep your streak!',
+                textAlign: TextAlign.center,
+                style: theme.bodySmall!.copyWith(color: c.textHint, height: 1.6),
+              ),
+              const SizedBox(height: 36),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onClose,
+                  icon: const Icon(Icons.home_rounded, size: 16),
+                  label: const Text('Back to Home'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

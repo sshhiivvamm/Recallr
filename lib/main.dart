@@ -5,6 +5,8 @@ import 'package:recallr/theme/recallr_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/database/isar_service.dart';
+import 'core/services/backup_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/share_intent_service.dart';
 
@@ -13,12 +15,17 @@ String? pendingSharedUrl;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService.instance.init();
+  // Run in background — don't block runApp on timezone DB + channel init
+  NotificationService.instance.init().ignore();
   final prefs = await SharedPreferences.getInstance();
   onboardingDone = prefs.getBool('onboarding_done') ?? false;
-  // Grab any URL that launched the app via share intent
   pendingSharedUrl = await ShareIntentService.getInitialUrl();
   runApp(const ProviderScope(child: MyApp()));
+
+  // Trigger backup in background after app has started.
+  IsarService.instance.db.then(
+    (isar) => BackupService.instance.autoBackup(isar).ignore(),
+  );
 }
 
 class MyApp extends ConsumerWidget {

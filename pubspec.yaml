@@ -53,6 +53,7 @@ dependencies:
   webview_flutter: ^4.8.0
   cached_network_image: ^3.4.0
   font_awesome_flutter: ^10.7.0
+  lottie: ^3.1.0
 
 dev_dependencies:
   flutter_test:
@@ -93,6 +94,7 @@ flutter:
 
   assets:
     - assets/icons/
+    - assets/animations/
 
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a
