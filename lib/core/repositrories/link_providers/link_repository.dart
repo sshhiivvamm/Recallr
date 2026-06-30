@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../data/models/Link/link_model.dart';
+import '../../../../data/models/Highlight/highlight_model.dart';
 import '../../../../data/models/Tag/tag_model.dart';
 import '../../../../data/models/collection_model.dart';
 
@@ -50,12 +51,18 @@ class LinkRepository {
 
   Future<void> deleteLink(int id) async {
     await isar.writeTxn(() async {
+      // Delete orphaned highlights for this link in the same transaction
+      final orphanIds = await isar.highlightModels
+          .filter()
+          .linkIdEqualTo(id)
+          .idProperty()
+          .findAll();
+      await isar.highlightModels.deleteAll(orphanIds);
       await isar.linkModels.delete(id);
     });
-    // Clean up all SharedPreferences keys associated with this link
+    // Clean up link health cache from SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     await Future.wait([
-      prefs.remove('sm2_$id'),
       prefs.remove('health_$id'),
       prefs.remove('health_ts_$id'),
     ]);
@@ -108,31 +115,50 @@ class LinkRepository {
   }
 
   Stream<int> watchTotalLinksCount() {
-    return isar.linkModels.where().watch(fireImmediately: true).map((links) => links.length);
+    // watchLazy fires without emitting the full list — count() is O(1) in Isar.
+    return isar.linkModels
+        .watchLazy(fireImmediately: true)
+        .asyncMap((_) => isar.linkModels.count());
   }
 
   Stream<int> watchThisWeekLinksCount() {
-    return isar.linkModels.where().watch(fireImmediately: true).map((links) {
-      final now = DateTime.now();
-      final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-      final weekStart = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
-      return links.where((link) => link.createdAt.isAfter(weekStart)).length;
-    });
+    return isar.linkModels
+        .watchLazy(fireImmediately: true)
+        .asyncMap((_) {
+          final now = DateTime.now();
+          final weekStart = DateTime(now.year, now.month, now.day)
+              .subtract(Duration(days: now.weekday - 1));
+          return isar.linkModels
+              .filter()
+              .createdAtGreaterThan(weekStart)
+              .count();
+        });
   }
 
   Stream<List<int>> watchThisWeekDailyCounts() {
-    return isar.linkModels.where().watch(fireImmediately: true).map((links) {
-      final now = DateTime.now();
-      final monday = now.subtract(Duration(days: now.weekday - 1));
-      final mondayDate = DateTime(monday.year, monday.month, monday.day);
-      final counts = List.filled(7, 0);
-      for (final link in links) {
-        final d = link.createdAt;
-        final diff = DateTime(d.year, d.month, d.day).difference(mondayDate).inDays;
-        if (diff >= 0 && diff < 7) counts[diff]++;
-      }
-      return counts;
-    });
+    return isar.linkModels
+        .watchLazy(fireImmediately: true)
+        .asyncMap((_) async {
+          final now = DateTime.now();
+          final monday = now.subtract(Duration(days: now.weekday - 1));
+          final mondayDate = DateTime(monday.year, monday.month, monday.day);
+          final endDate = mondayDate.add(const Duration(days: 7));
+
+          // Only load links from this week — index on createdAt makes this fast.
+          final links = await isar.linkModels
+              .filter()
+              .createdAtBetween(mondayDate, endDate)
+              .findAll();
+
+          final counts = List.filled(7, 0);
+          for (final link in links) {
+            final d = link.createdAt;
+            final diff =
+                DateTime(d.year, d.month, d.day).difference(mondayDate).inDays;
+            if (diff >= 0 && diff < 7) counts[diff]++;
+          }
+          return counts;
+        });
   }
 
   Future<LinkModel?> getDiscoverLink() async {

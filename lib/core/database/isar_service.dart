@@ -6,6 +6,7 @@ import '../../data/models/Highlight/highlight_model.dart';
 import '../../data/models/Link/link_model.dart';
 import '../../data/models/Tag/tag_model.dart';
 import '../services/backup_service.dart';
+import '../services/sm2_migration_service.dart';
 
 class IsarService {
   IsarService._();
@@ -25,6 +26,9 @@ class IsarService {
 
     // Auto-restore from backup if DB is empty (e.g. after reinstall).
     await BackupService.instance.autoRestore(isar);
+
+    // One-time migration: move SM-2 state from SharedPreferences into Isar.
+    await Sm2MigrationService.instance.migrate(isar);
 
     return isar;
   }

@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'dart:math';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../data/models/Link/link_model.dart';
+import '../database/isar_service.dart';
 
 class Sm2Data {
   final int repetitions;
@@ -17,22 +15,6 @@ class Sm2Data {
     this.interval = 1,
     this.nextReviewAt,
   });
-
-  Map<String, dynamic> toJson() => {
-        'reps': repetitions,
-        'ease': easeFactor,
-        'interval': interval,
-        'nextReview': nextReviewAt?.toIso8601String(),
-      };
-
-  factory Sm2Data.fromJson(Map<String, dynamic> j) => Sm2Data(
-        repetitions: (j['reps'] as int?) ?? 0,
-        easeFactor: (j['ease'] as num?)?.toDouble() ?? 2.5,
-        interval: (j['interval'] as int?) ?? 1,
-        nextReviewAt: j['nextReview'] != null
-            ? DateTime.tryParse(j['nextReview'] as String)
-            : null,
-      );
 }
 
 class Sm2Service {
@@ -41,25 +23,33 @@ class Sm2Service {
 
   static const double _minEase = 1.3;
 
-  String _key(int linkId) => 'sm2_$linkId';
+  Sm2Data _fromModel(LinkModel link) => Sm2Data(
+        repetitions: link.smRepetitions,
+        easeFactor: link.smEaseFactor,
+        interval: link.smInterval,
+        nextReviewAt: link.smNextReview,
+      );
 
   Future<Sm2Data> getData(int linkId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key(linkId));
-    if (raw == null) return const Sm2Data();
-    try {
-      return Sm2Data.fromJson(jsonDecode(raw) as Map<String, dynamic>);
-    } catch (_) {
-      return const Sm2Data();
-    }
+    final isar = await IsarService.instance.db;
+    final link = await isar.linkModels.get(linkId);
+    if (link == null) return const Sm2Data();
+    return _fromModel(link);
   }
 
   // quality: 1=Forgot, 3=Hard, 4=Good, 5=Easy
   Future<void> review(int linkId, int quality) async {
-    final current = await getData(linkId);
-    final next = _compute(current, quality);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key(linkId), jsonEncode(next.toJson()));
+    final isar = await IsarService.instance.db;
+    await isar.writeTxn(() async {
+      final link = await isar.linkModels.get(linkId);
+      if (link == null) return;
+      final next = _compute(_fromModel(link), quality);
+      link.smRepetitions = next.repetitions;
+      link.smEaseFactor = next.easeFactor;
+      link.smInterval = next.interval;
+      link.smNextReview = next.nextReviewAt;
+      await isar.linkModels.put(link);
+    });
   }
 
   Sm2Data _compute(Sm2Data current, int quality) {
@@ -99,31 +89,17 @@ class Sm2Service {
     return data.nextReviewAt!.isBefore(DateTime.now());
   }
 
+  // SM-2 data is now on the model — no I/O needed here
   Future<List<LinkModel>> getReviewQueue(List<LinkModel> allLinks) async {
-    final prefs = await SharedPreferences.getInstance();
     final due = <LinkModel>[];
-
     for (final link in allLinks) {
-      final raw = prefs.getString(_key(link.id));
-      if (raw == null) {
-        due.add(link);
-        continue;
-      }
-      try {
-        final data = Sm2Data.fromJson(jsonDecode(raw) as Map<String, dynamic>);
-        if (isDue(data)) due.add(link);
-      } catch (_) {
-        due.add(link);
-      }
+      if (isDue(_fromModel(link))) due.add(link);
     }
-
-    // Oldest unseen links first, then re-reviews
     due.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return due;
   }
 
   Future<int> getDueCount(List<LinkModel> allLinks) async {
-    final queue = await getReviewQueue(allLinks);
-    return queue.length;
+    return (await getReviewQueue(allLinks)).length;
   }
 }

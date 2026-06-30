@@ -10,6 +10,7 @@ import '../core/database/providers/isar_provider.dart';
 import '../core/features/category/tag_list_provider.dart';
 import '../core/features/category/tag_provider.dart';
 import '../core/features/collections/collection_provider.dart';
+import '../core/repositrories/link_providers/recent_links_provider.dart';
 import '../core/services/auto_categorizer.dart';
 import '../core/services/tag_suggester.dart';
 import '../data/models/Link/link_model.dart';
@@ -196,6 +197,11 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
           await link.folder.save();
         }
       });
+
+      // Refresh home-screen spotlight cards that aren't on a live stream
+      ref.invalidate(discoverLinkProvider);
+      ref.invalidate(nextReadProvider);
+      ref.invalidate(reviewDueCountProvider);
 
       if (!mounted) return;
       setState(() => _saveSuccess = true);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -68,7 +69,20 @@ class _ReReaderState extends ConsumerState<ReReader> {
 ''';
 
   // ── Reader-mode JavaScript ─────────────────────────────────────────────────
-  static const _readerJs = r"""
+  // Colors are injected at call time to match the user's current theme.
+  static String _buildReaderJs(bool isDark) {
+    final bg      = isDark ? '#0F172A' : '#F8FAFC';
+    final text    = isDark ? '#E2E8F0' : '#1E293B';
+    final heading = isDark ? '#F8FAFC' : '#0F172A';
+    final sec     = isDark ? '#CBD5E1' : '#475569';
+    final link    = isDark ? '#38BDF8' : '#0EA5E9';
+    final codeBg  = isDark ? '#1E293B' : '#F1F5F9';
+    final codeTxt = isDark ? '#38BDF8' : '#0369A1';
+    final qtBdr   = isDark ? '#38BDF8' : '#0EA5E9';
+    final qtTxt   = isDark ? '#94A3B8' : '#64748B';
+
+    // JS template literal \${...} must be escaped in Dart non-raw strings.
+    return """
 (function() {
   try {
     const title = document.title || '';
@@ -102,40 +116,38 @@ class _ReReaderState extends ConsumerState<ReReader> {
       try { content.querySelectorAll(sel).forEach(e => e.remove()); } catch(_){}
     });
 
-    document.body.innerHTML = `
-      <div style="
-        max-width:680px; margin:0 auto; padding:24px 20px 80px;
-        font-family:-apple-system,Georgia,serif;
-        font-size:18px; line-height:1.75;
-        color:#E2E8F0; background:#0F172A;
-      ">
-        <h1 style="font-size:24px;font-weight:700;margin-bottom:20px;
-          line-height:1.3;color:#F8FAFC;">${title}</h1>
-        ${content.innerHTML}
-      </div>`;
+    document.body.innerHTML =
+      '<div style="max-width:680px;margin:0 auto;padding:24px 20px 80px;'
+      + 'font-family:-apple-system,Georgia,serif;font-size:18px;line-height:1.75;'
+      + 'color:$text;background:$bg;">'
+      + '<h1 style="font-size:24px;font-weight:700;margin-bottom:20px;'
+      + 'line-height:1.3;color:$heading;">' + title + '</h1>'
+      + content.innerHTML
+      + '</div>';
 
     document.querySelectorAll('p,li,h1,h2,h3,h4,h5,h6,span')
-      .forEach(el => { el.style.color = '#CBD5E1'; });
+      .forEach(el => { el.style.color = '$sec'; });
     document.querySelectorAll('a')
-      .forEach(el => { el.style.color = '#38BDF8'; el.style.textDecoration = 'none'; });
+      .forEach(el => { el.style.color = '$link'; el.style.textDecoration = 'none'; });
     document.querySelectorAll('img')
       .forEach(el => { el.style.maxWidth='100%'; el.style.borderRadius='8px';
                        el.style.display='block'; el.style.margin='16px 0'; });
     document.querySelectorAll('pre,code')
-      .forEach(el => { el.style.background='#1E293B'; el.style.color='#38BDF8';
+      .forEach(el => { el.style.background='$codeBg'; el.style.color='$codeTxt';
                        el.style.padding='4px 8px'; el.style.borderRadius='4px';
                        el.style.fontSize='0.85em'; el.style.overflowX='auto'; });
     document.querySelectorAll('blockquote')
-      .forEach(el => { el.style.borderLeft='3px solid #38BDF8';
+      .forEach(el => { el.style.borderLeft='3px solid $qtBdr';
                        el.style.margin='12px 0'; el.style.paddingLeft='16px';
-                       el.style.color='#94A3B8'; });
+                       el.style.color='$qtTxt'; });
 
-    document.documentElement.style.background = '#0F172A';
-    document.body.style.background = '#0F172A';
+    document.documentElement.style.background = '$bg';
+    document.body.style.background = '$bg';
     document.body.style.margin = '0';
   } catch(e) { console.warn('ReaderMode:', e); }
 })();
 """;
+  }
 
   @override
   void initState() {
@@ -158,12 +170,13 @@ class _ReReaderState extends ConsumerState<ReReader> {
       ..setNavigationDelegate(NavigationDelegate(
         onPageStarted: (_) => setState(() => _loading = true),
         onPageFinished: (url) async {
+          if (!mounted) return;
           final title = await _ctrl.getTitle();
           setState(() {
             _loading   = false;
             _pageTitle = title ?? _domainOf(url);
           });
-          if (_readerMode) await _ctrl.runJavaScript(_readerJs);
+          if (_readerMode) await _ctrl.runJavaScript(_buildReaderJs(context.isDark));
           await _ctrl.runJavaScript(_selectionJs);
           // Re-paint any previously saved highlights for this link
           await _reinjectSavedHighlights();
@@ -208,14 +221,13 @@ class _ReReaderState extends ConsumerState<ReReader> {
       ..addJavaScriptChannel(
         'HighlightChannel',
         onMessageReceived: (JavaScriptMessage message) {
-          debugPrint('[HighlightChannel] raw message: ${message.message}');
           try {
             final data = jsonDecode(message.message) as Map<String, dynamic>;
             final text = data['text'] as String? ?? '';
             if (text.isEmpty) return;
             _showHighlightToolbar(text);
-          } catch (e) {
-            debugPrint('[HighlightChannel] parse error: $e');
+          } catch (_) {
+            // Malformed message from JS — ignore silently
           }
         },
       )
@@ -236,7 +248,7 @@ class _ReReaderState extends ConsumerState<ReReader> {
     final next = !_readerMode;
     setState(() => _readerMode = next);
     if (next) {
-      await _ctrl.runJavaScript(_readerJs);
+      await _ctrl.runJavaScript(_buildReaderJs(context.isDark));
     } else {
       await _ctrl.reload();
     }
@@ -301,7 +313,6 @@ class _ReReaderState extends ConsumerState<ReReader> {
 
   void _showHighlightToolbar(String selectedText) {
     if (!mounted) return;
-    debugPrint('[HighlightChannel] showing toolbar for: "$selectedText"');
     _removeHighlightToolbar();
     _pendingHighlightText = selectedText;
     final safePadding = MediaQuery.of(context).padding.bottom;
@@ -366,7 +377,6 @@ class _ReReaderState extends ConsumerState<ReReader> {
         ..colorHex = cssColor
         ..note = note;
       await ref.read(highlightRepositoryProvider).saveHighlight(highlight);
-      debugPrint('[HighlightChannel] saved highlight: "$_pendingHighlightText"');
     }
   }
 
@@ -622,6 +632,7 @@ class _HighlightsSheet extends ConsumerStatefulWidget {
 
 class _HighlightsSheetState extends ConsumerState<_HighlightsSheet> {
   List<HighlightModel> _highlights = [];
+  StreamSubscription<List<HighlightModel>>? _highlightSub;
 
   // ordered color groups
   static const _colorOrder = [
@@ -640,13 +651,18 @@ class _HighlightsSheetState extends ConsumerState<_HighlightsSheet> {
   @override
   void initState() {
     super.initState();
-    // Subscribe to the stream — updates when highlights are added or deleted
-    ref
+    _highlightSub = ref
         .read(highlightRepositoryProvider)
         .watchByLinkId(widget.linkId)
         .listen((list) {
       if (mounted) setState(() => _highlights = list);
     });
+  }
+
+  @override
+  void dispose() {
+    _highlightSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _delete(HighlightModel h) async {

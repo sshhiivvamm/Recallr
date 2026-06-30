@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -298,6 +297,8 @@ class _Body extends ConsumerWidget {
                   ),
                   onDelete: () =>
                       _confirmDelete(ctx, ref, folders[index]),
+                  onRename: () =>
+                      _promptRename(ctx, ref, folders[index]),
                 ),
                 childCount: folders.length,
               ),
@@ -311,6 +312,40 @@ class _Body extends ConsumerWidget {
           ),
       ],
     );
+  }
+
+  Future<void> _promptRename(
+      BuildContext context, WidgetRef ref, FolderModel folder) async {
+    final ctrl = TextEditingController(text: folder.name);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Collection'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(hintText: 'Collection name'),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+
+    if (newName != null && newName.isNotEmpty && newName != folder.name &&
+        context.mounted) {
+      final repo = await ref.read(collectionRepoProvider.future);
+      await repo.rename(folder.id, newName);
+    }
   }
 
   Future<void> _confirmDelete(
@@ -341,38 +376,6 @@ class _Body extends ConsumerWidget {
   }
 }
 
-// ── Unsplash cover URL ────────────────────────────────────────────────────────
-
-String _unsplashCoverUrl(String name, int id) {
-  final lower = name.toLowerCase();
-  final String kw;
-  if (lower.contains('tech') || lower.contains('code') || lower.contains('dev') || lower.contains('programm')) {
-    kw = 'technology,programming';
-  } else if (lower.contains('design') || lower.contains('art') || lower.contains('ui') || lower.contains('creative')) {
-    kw = 'design,art';
-  } else if (lower.contains('health') || lower.contains('fitness') || lower.contains('wellness')) {
-    kw = 'health,wellness';
-  } else if (lower.contains('business') || lower.contains('finance') || lower.contains('money')) {
-    kw = 'business,finance';
-  } else if (lower.contains('science') || lower.contains('research')) {
-    kw = 'science,research';
-  } else if (lower.contains('book') || lower.contains('learn') || lower.contains('educat') || lower.contains('read')) {
-    kw = 'books,education';
-  } else if (lower.contains('food') || lower.contains('cook') || lower.contains('recipe')) {
-    kw = 'food,cooking';
-  } else if (lower.contains('travel') || lower.contains('trip') || lower.contains('adventure')) {
-    kw = 'travel,adventure';
-  } else if (lower.contains('music') || lower.contains('audio') || lower.contains('podcast')) {
-    kw = 'music,audio';
-  } else if (lower.contains('nature') || lower.contains('outdoor') || lower.contains('environment')) {
-    kw = 'nature,landscape';
-  } else {
-    kw = Uri.encodeComponent(name.isEmpty ? 'minimal,abstract' : name);
-  }
-  // Use folder id as a seed for variety across collections with the same keyword
-  return 'https://source.unsplash.com/featured/400x200/?$kw&sig=$id';
-}
-
 // ── Folder Card ───────────────────────────────────────────────────────────────
 
 class _FolderCard extends StatefulWidget {
@@ -381,6 +384,7 @@ class _FolderCard extends StatefulWidget {
   final TextTheme theme;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+  final VoidCallback onRename;
 
   const _FolderCard({
     required this.folder,
@@ -388,6 +392,7 @@ class _FolderCard extends StatefulWidget {
     required this.theme,
     required this.onTap,
     required this.onDelete,
+    required this.onRename,
   });
 
   @override
@@ -422,6 +427,7 @@ class _FolderCardState extends State<_FolderCard> {
       onPointerCancel: (_) => setState(() => _pressed = false),
       child: GestureDetector(
         onTap: widget.onTap,
+        onLongPress: widget.onRename,
         child: AnimatedScale(
           scale: _pressed ? 0.972 : 1.0,
           duration: const Duration(milliseconds: 100),
@@ -450,34 +456,30 @@ class _FolderCardState extends State<_FolderCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Cover image ──────────────────────────────
+                  // ── Cover — deterministic gradient from collection color ──
                   SizedBox(
                     height: 88,
                     width: double.infinity,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        CachedNetworkImage(
-                          imageUrl: _unsplashCoverUrl(folder.name, folder.id),
-                          fit: BoxFit.cover,
-                          errorWidget: (ctx, url, e) => Container(
-                            color: color.withValues(alpha: 0.15),
-                          ),
-                          placeholder: (ctx, url) => Container(
-                            color: color.withValues(alpha: 0.08),
-                          ),
-                        ),
-                        // Gradient overlay so text stays legible
                         DecoratedBox(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                               colors: [
-                                Colors.black.withValues(alpha: 0.08),
-                                Colors.black.withValues(alpha: 0.45),
+                                color.withValues(alpha: 0.55),
+                                color.withValues(alpha: 0.22),
                               ],
                             ),
+                          ),
+                        ),
+                        Center(
+                          child: Icon(
+                            Icons.folder_open_rounded,
+                            size: 36,
+                            color: color.withValues(alpha: 0.40),
                           ),
                         ),
                         // Delete button
@@ -490,7 +492,7 @@ class _FolderCardState extends State<_FolderCard> {
                               width: 26,
                               height: 26,
                               decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.35),
+                                color: Colors.black.withValues(alpha: 0.25),
                                 borderRadius: BorderRadius.circular(7),
                               ),
                               child: const Icon(Icons.close_rounded,

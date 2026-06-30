@@ -35,6 +35,15 @@ class CollectionRepository {
     return folder;
   }
 
+  Future<void> rename(int id, String newName) async {
+    await isar.writeTxn(() async {
+      final folder = await isar.folderModels.get(id);
+      if (folder == null) return;
+      folder.name = newName;
+      await isar.folderModels.put(folder);
+    });
+  }
+
   Future<void> delete(int id) async {
     await isar.writeTxn(() async {
       final folder = await isar.folderModels.get(id);

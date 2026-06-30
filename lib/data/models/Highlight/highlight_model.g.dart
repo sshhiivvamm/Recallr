@@ -49,6 +49,19 @@ const HighlightModelSchema = CollectionSchema(
   deserializeProp: _highlightModelDeserializeProp,
   idName: r'id',
   indexes: {
+    r'linkId': IndexSchema(
+      id: -7589858936983096473,
+      name: r'linkId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'linkId',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
     r'text': IndexSchema(
       id: 5145922347574273553,
       name: r'text',
@@ -164,6 +177,14 @@ extension HighlightModelQueryWhereSort
       return query.addWhereClause(const IdWhereClause.any());
     });
   }
+
+  QueryBuilder<HighlightModel, HighlightModel, QAfterWhere> anyLinkId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'linkId'),
+      );
+    });
+  }
 }
 
 extension HighlightModelQueryWhere
@@ -232,6 +253,98 @@ extension HighlightModelQueryWhere
         lower: lowerId,
         includeLower: includeLower,
         upper: upperId,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<HighlightModel, HighlightModel, QAfterWhereClause> linkIdEqualTo(
+      int linkId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'linkId',
+        value: [linkId],
+      ));
+    });
+  }
+
+  QueryBuilder<HighlightModel, HighlightModel, QAfterWhereClause>
+      linkIdNotEqualTo(int linkId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'linkId',
+              lower: [],
+              upper: [linkId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'linkId',
+              lower: [linkId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'linkId',
+              lower: [linkId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'linkId',
+              lower: [],
+              upper: [linkId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<HighlightModel, HighlightModel, QAfterWhereClause>
+      linkIdGreaterThan(
+    int linkId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'linkId',
+        lower: [linkId],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<HighlightModel, HighlightModel, QAfterWhereClause>
+      linkIdLessThan(
+    int linkId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'linkId',
+        lower: [],
+        upper: [linkId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<HighlightModel, HighlightModel, QAfterWhereClause> linkIdBetween(
+    int lowerLinkId,
+    int upperLinkId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'linkId',
+        lower: [lowerLinkId],
+        includeLower: includeLower,
+        upper: [upperLinkId],
         includeUpper: includeUpper,
       ));
     });

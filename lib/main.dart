@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:recallr/app_routes.dart';
 import 'package:recallr/theme/controller/theme_controller.dart';
 import 'package:recallr/theme/recallr_theme.dart';
@@ -14,13 +15,20 @@ import 'core/services/share_intent_service.dart';
 String? pendingSharedUrl;
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  // Keep the native splash visible until we finish init work below.
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+
   // Run in background — don't block runApp on timezone DB + channel init
   NotificationService.instance.init().ignore();
   final prefs = await SharedPreferences.getInstance();
   onboardingDone = prefs.getBool('onboarding_done') ?? false;
   pendingSharedUrl = await ShareIntentService.getInitialUrl();
+
   runApp(const ProviderScope(child: MyApp()));
+
+  // Remove the native splash once the first Flutter frame is scheduled.
+  FlutterNativeSplash.remove();
 
   // Trigger backup in background after app has started.
   IsarService.instance.db.then(

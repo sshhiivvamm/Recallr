@@ -6,6 +6,7 @@ part 'highlight_model.g.dart';
 class HighlightModel {
   Id id = Isar.autoIncrement;
 
+  @Index()
   late int linkId;
 
   @Index()

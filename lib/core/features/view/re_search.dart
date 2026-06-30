@@ -20,7 +20,7 @@ final _searchParamsProvider = StateProvider<LinkSearchParams>(
 );
 
 final _searchResultsProvider =
-    FutureProvider.family<List<SearchResult>, LinkSearchParams>(
+    FutureProvider.autoDispose.family<List<SearchResult>, LinkSearchParams>(
   (ref, params) async {
     final isar = await ref.read(isarProvider.future);
     return searchLinks(isar, params);

@@ -62,23 +62,43 @@ const LinkModelSchema = CollectionSchema(
       name: r'siteName',
       type: IsarType.string,
     ),
-    r'thumbnail': PropertySchema(
+    r'smEaseFactor': PropertySchema(
       id: 9,
+      name: r'smEaseFactor',
+      type: IsarType.double,
+    ),
+    r'smInterval': PropertySchema(
+      id: 10,
+      name: r'smInterval',
+      type: IsarType.long,
+    ),
+    r'smNextReview': PropertySchema(
+      id: 11,
+      name: r'smNextReview',
+      type: IsarType.dateTime,
+    ),
+    r'smRepetitions': PropertySchema(
+      id: 12,
+      name: r'smRepetitions',
+      type: IsarType.long,
+    ),
+    r'thumbnail': PropertySchema(
+      id: 13,
       name: r'thumbnail',
       type: IsarType.string,
     ),
     r'title': PropertySchema(
-      id: 10,
+      id: 14,
       name: r'title',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 11,
+      id: 15,
       name: r'updatedAt',
       type: IsarType.dateTime,
     ),
     r'url': PropertySchema(
-      id: 12,
+      id: 16,
       name: r'url',
       type: IsarType.string,
     )
@@ -136,6 +156,19 @@ const LinkModelSchema = CollectionSchema(
       properties: [
         IndexPropertySchema(
           name: r'notes',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'createdAt': IndexSchema(
+      id: -3433535483987302584,
+      name: r'createdAt',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'createdAt',
           type: IndexType.value,
           caseSensitive: false,
         )
@@ -225,10 +258,14 @@ void _linkModelSerialize(
   writer.writeDateTime(offsets[6], object.lastOpenedAt);
   writer.writeString(offsets[7], object.notes);
   writer.writeString(offsets[8], object.siteName);
-  writer.writeString(offsets[9], object.thumbnail);
-  writer.writeString(offsets[10], object.title);
-  writer.writeDateTime(offsets[11], object.updatedAt);
-  writer.writeString(offsets[12], object.url);
+  writer.writeDouble(offsets[9], object.smEaseFactor);
+  writer.writeLong(offsets[10], object.smInterval);
+  writer.writeDateTime(offsets[11], object.smNextReview);
+  writer.writeLong(offsets[12], object.smRepetitions);
+  writer.writeString(offsets[13], object.thumbnail);
+  writer.writeString(offsets[14], object.title);
+  writer.writeDateTime(offsets[15], object.updatedAt);
+  writer.writeString(offsets[16], object.url);
 }
 
 LinkModel _linkModelDeserialize(
@@ -248,10 +285,14 @@ LinkModel _linkModelDeserialize(
   object.lastOpenedAt = reader.readDateTimeOrNull(offsets[6]);
   object.notes = reader.readStringOrNull(offsets[7]);
   object.siteName = reader.readStringOrNull(offsets[8]);
-  object.thumbnail = reader.readStringOrNull(offsets[9]);
-  object.title = reader.readString(offsets[10]);
-  object.updatedAt = reader.readDateTimeOrNull(offsets[11]);
-  object.url = reader.readString(offsets[12]);
+  object.smEaseFactor = reader.readDouble(offsets[9]);
+  object.smInterval = reader.readLong(offsets[10]);
+  object.smNextReview = reader.readDateTimeOrNull(offsets[11]);
+  object.smRepetitions = reader.readLong(offsets[12]);
+  object.thumbnail = reader.readStringOrNull(offsets[13]);
+  object.title = reader.readString(offsets[14]);
+  object.updatedAt = reader.readDateTimeOrNull(offsets[15]);
+  object.url = reader.readString(offsets[16]);
   return object;
 }
 
@@ -281,12 +322,20 @@ P _linkModelDeserializeProp<P>(
     case 8:
       return (reader.readStringOrNull(offset)) as P;
     case 9:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 10:
-      return (reader.readString(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 11:
       return (reader.readDateTimeOrNull(offset)) as P;
     case 12:
+      return (reader.readLong(offset)) as P;
+    case 13:
+      return (reader.readStringOrNull(offset)) as P;
+    case 14:
+      return (reader.readString(offset)) as P;
+    case 15:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 16:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -381,6 +430,14 @@ extension LinkModelQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'notes'),
+      );
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhere> anyCreatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'createdAt'),
       );
     });
   }
@@ -852,6 +909,96 @@ extension LinkModelQueryWhere
               upper: [''],
             ));
       }
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> createdAtEqualTo(
+      DateTime createdAt) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'createdAt',
+        value: [createdAt],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> createdAtNotEqualTo(
+      DateTime createdAt) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'createdAt',
+              lower: [],
+              upper: [createdAt],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'createdAt',
+              lower: [createdAt],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'createdAt',
+              lower: [createdAt],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'createdAt',
+              lower: [],
+              upper: [createdAt],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> createdAtGreaterThan(
+    DateTime createdAt, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'createdAt',
+        lower: [createdAt],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> createdAtLessThan(
+    DateTime createdAt, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'createdAt',
+        lower: [],
+        upper: [createdAt],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterWhereClause> createdAtBetween(
+    DateTime lowerCreatedAt,
+    DateTime upperCreatedAt, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'createdAt',
+        lower: [lowerCreatedAt],
+        includeLower: includeLower,
+        upper: [upperCreatedAt],
+        includeUpper: includeUpper,
+      ));
     });
   }
 }
@@ -1797,6 +1944,253 @@ extension LinkModelQueryFilter
     });
   }
 
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition> smEaseFactorEqualTo(
+    double value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'smEaseFactor',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition>
+      smEaseFactorGreaterThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'smEaseFactor',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition>
+      smEaseFactorLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'smEaseFactor',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition> smEaseFactorBetween(
+    double lower,
+    double upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'smEaseFactor',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition> smIntervalEqualTo(
+      int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'smInterval',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition>
+      smIntervalGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'smInterval',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition> smIntervalLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'smInterval',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition> smIntervalBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'smInterval',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition>
+      smNextReviewIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'smNextReview',
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition>
+      smNextReviewIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'smNextReview',
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition> smNextReviewEqualTo(
+      DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'smNextReview',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition>
+      smNextReviewGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'smNextReview',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition>
+      smNextReviewLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'smNextReview',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition> smNextReviewBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'smNextReview',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition>
+      smRepetitionsEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'smRepetitions',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition>
+      smRepetitionsGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'smRepetitions',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition>
+      smRepetitionsLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'smRepetitions',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition>
+      smRepetitionsBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'smRepetitions',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<LinkModel, LinkModel, QAfterFilterCondition> thumbnailIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -2463,6 +2857,54 @@ extension LinkModelQuerySortBy on QueryBuilder<LinkModel, LinkModel, QSortBy> {
     });
   }
 
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> sortBySmEaseFactor() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smEaseFactor', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> sortBySmEaseFactorDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smEaseFactor', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> sortBySmInterval() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smInterval', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> sortBySmIntervalDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smInterval', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> sortBySmNextReview() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smNextReview', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> sortBySmNextReviewDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smNextReview', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> sortBySmRepetitions() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smRepetitions', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> sortBySmRepetitionsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smRepetitions', Sort.desc);
+    });
+  }
+
   QueryBuilder<LinkModel, LinkModel, QAfterSortBy> sortByThumbnail() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'thumbnail', Sort.asc);
@@ -2634,6 +3076,54 @@ extension LinkModelQuerySortThenBy
     });
   }
 
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> thenBySmEaseFactor() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smEaseFactor', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> thenBySmEaseFactorDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smEaseFactor', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> thenBySmInterval() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smInterval', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> thenBySmIntervalDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smInterval', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> thenBySmNextReview() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smNextReview', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> thenBySmNextReviewDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smNextReview', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> thenBySmRepetitions() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smRepetitions', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QAfterSortBy> thenBySmRepetitionsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smRepetitions', Sort.desc);
+    });
+  }
+
   QueryBuilder<LinkModel, LinkModel, QAfterSortBy> thenByThumbnail() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'thumbnail', Sort.asc);
@@ -2744,6 +3234,30 @@ extension LinkModelQueryWhereDistinct
     });
   }
 
+  QueryBuilder<LinkModel, LinkModel, QDistinct> distinctBySmEaseFactor() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'smEaseFactor');
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QDistinct> distinctBySmInterval() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'smInterval');
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QDistinct> distinctBySmNextReview() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'smNextReview');
+    });
+  }
+
+  QueryBuilder<LinkModel, LinkModel, QDistinct> distinctBySmRepetitions() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'smRepetitions');
+    });
+  }
+
   QueryBuilder<LinkModel, LinkModel, QDistinct> distinctByThumbnail(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2831,6 +3345,30 @@ extension LinkModelQueryProperty
   QueryBuilder<LinkModel, String?, QQueryOperations> siteNameProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'siteName');
+    });
+  }
+
+  QueryBuilder<LinkModel, double, QQueryOperations> smEaseFactorProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'smEaseFactor');
+    });
+  }
+
+  QueryBuilder<LinkModel, int, QQueryOperations> smIntervalProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'smInterval');
+    });
+  }
+
+  QueryBuilder<LinkModel, DateTime?, QQueryOperations> smNextReviewProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'smNextReview');
+    });
+  }
+
+  QueryBuilder<LinkModel, int, QQueryOperations> smRepetitionsProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'smRepetitions');
     });
   }
 

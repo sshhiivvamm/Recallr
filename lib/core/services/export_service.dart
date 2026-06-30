@@ -67,6 +67,10 @@ class ExportService {
         'isRead': l.isRead,
         'savedAt': l.createdAt.toIso8601String(),
         'lastOpenedAt': l.lastOpenedAt?.toIso8601String(),
+        'smRepetitions': l.smRepetitions,
+        'smEaseFactor': l.smEaseFactor,
+        'smInterval': l.smInterval,
+        'smNextReview': l.smNextReview?.toIso8601String(),
       };
 
   Future<void> _shareText(String content, String filename, String mimeType) async {

@@ -499,7 +499,7 @@ class _HeroTitleDelegate extends SliverPersistentHeaderDelegate {
                           layoutBuilder: (current, previous) => Stack(
                             alignment: Alignment.topLeft,
                             clipBehavior: Clip.hardEdge,
-                            children: [...previous, ?current],
+                            children: [...previous, if (current != null) current],
                           ),
                           transitionBuilder: _wordSlideTransition,
                           child: ShaderMask(
@@ -537,7 +537,7 @@ class _HeroTitleDelegate extends SliverPersistentHeaderDelegate {
                           layoutBuilder: (current, previous) => Stack(
                             alignment: Alignment.centerLeft,
                             clipBehavior: Clip.hardEdge,
-                            children: [...previous, ?current],
+                            children: [...previous, if (current != null) current],
                           ),
                           transitionBuilder: _wordSlideTransition,
                           child: ShaderMask(

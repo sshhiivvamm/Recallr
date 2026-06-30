@@ -30,9 +30,16 @@ class LinkModel {
   bool isFavorite = false;
   bool isRead = false;
 
+  @Index()
   DateTime createdAt = DateTime.now();
   DateTime? lastOpenedAt;
   DateTime? updatedAt;
+
+  // SM-2 spaced-repetition state — persisted here so backup/restore preserves it
+  int smRepetitions = 0;
+  double smEaseFactor = 2.5;
+  int smInterval = 1;
+  DateTime? smNextReview;
 
   final tags = IsarLinks<TagModel>();
   final folder = IsarLink<FolderModel>();
