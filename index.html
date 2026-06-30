@@ -1,0 +1,2282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recallr — Don't Forget What You Saved, Ever Again</title>
+  <meta name="description" content="The offline link manager with spaced repetition that resurfaces your saved links before you forget them. No account. No clutter.">
+  <link rel="canonical" href="https://recallr.app/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://recallr.app/">
+  <meta property="og:title" content="Recallr — Don't Forget What You Saved, Ever Again">
+  <meta property="og:description" content="The offline link manager with spaced repetition that resurfaces your saved links before you forget them. No account. No clutter.">
+  <meta property="og:image" content="https://recallr.app/og-image.png">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Recallr — Don't Forget What You Saved, Ever Again">
+  <meta name="twitter:description" content="The offline link manager with spaced repetition that resurfaces your saved links before you forget them. No account. No clutter.">
+  <meta name="twitter:image" content="https://recallr.app/og-image.png">
+
+  <!-- Favicon — place generated files at site root -->
+  <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+  <style>
+    /* ─── Reset & Base ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #07090D;
+      --surface:     #0F172A;
+      --surface2:    #1E293B;
+      --border:      rgba(255,255,255,0.07);
+      --border2:     rgba(255,255,255,0.12);
+      --cyan:        #38BDF8;
+      --cyan-dim:    rgba(56,189,248,0.12);
+      --cyan-glow:   rgba(56,189,248,0.20);
+      --purple:      #A78BFA;
+      --purple-dim:  rgba(167,139,250,0.12);
+      --green:       #34D399;
+      --green-dim:   rgba(52,211,153,0.12);
+      --amber:       #FBBF24;
+      --amber-dim:   rgba(251,191,36,0.12);
+      --coral:       #F87171;
+      --text1:       #F8FAFC;
+      --text2:       rgba(248,250,252,0.60);
+      --text3:       rgba(248,250,252,0.32);
+      --radius-sm:   10px;
+      --radius-md:   16px;
+      --radius-lg:   24px;
+      --radius-xl:   32px;
+    }
+
+    html { scroll-behavior: smooth; overflow-x: hidden; }
+
+    body {
+      font-family: 'Space Grotesk', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text1);
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── Noise texture overlay ─────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ─── Global glow orbs ──────────────────────────────────────── */
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      pointer-events: none;
+    }
+
+    /* ─── Typography ────────────────────────────────────────────── */
+    .label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--cyan);
+    }
+
+    .headline-xl {
+      font-size: clamp(42px, 7vw, 80px);
+      font-weight: 800;
+      letter-spacing: -2px;
+      line-height: 1.0;
+      color: var(--text1);
+    }
+
+    .headline-lg {
+      font-size: clamp(32px, 5vw, 56px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.08;
+      color: var(--text1);
+    }
+
+    .headline-md {
+      font-size: clamp(22px, 3.5vw, 36px);
+      font-weight: 700;
+      letter-spacing: -0.8px;
+      line-height: 1.2;
+      color: var(--text1);
+    }
+
+    .body-lg {
+      font-size: 17px;
+      font-weight: 400;
+      line-height: 1.7;
+      color: var(--text2);
+    }
+
+    .body-md {
+      font-size: 15px;
+      font-weight: 400;
+      line-height: 1.65;
+      color: var(--text2);
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, var(--cyan) 0%, #60A5FA 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .gradient-text-amber {
+      background: linear-gradient(135deg, var(--amber) 0%, #F87171 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ─── Layout ─────────────────────────────────────────────────── */
+    .container {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    section { position: relative; z-index: 1; overflow: hidden; }
+
+    /* ─── NAV ─────────────────────────────────────────────────────── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 16px 0;
+      transition: background 0.3s, border-color 0.3s;
+    }
+
+    nav.scrolled {
+      background: rgba(7,9,13,0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .nav-logo-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--cyan), #60A5FA);
+      box-shadow: 0 0 12px var(--cyan-glow);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { box-shadow: 0 0 8px var(--cyan-glow); }
+      50% { box-shadow: 0 0 20px rgba(56,189,248,0.5); }
+    }
+
+    .nav-logo-text {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--cyan);
+      text-transform: uppercase;
+    }
+
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: linear-gradient(135deg, var(--cyan), #60A5FA);
+      border-radius: 50px;
+      color: #07090D;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .nav-cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(56,189,248,0.35);
+    }
+
+    /* ─── HERO ───────────────────────────────────────────────────── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding: 120px 0 80px;
+      overflow: hidden;
+    }
+
+    .hero-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .hero-left { position: relative; z-index: 2; }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: var(--cyan-dim);
+      border: 1px solid rgba(56,189,248,0.2);
+      border-radius: 50px;
+      margin-bottom: 28px;
+    }
+
+    .hero-badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--cyan);
+      animation: pulse-dot 1.8s ease-in-out infinite;
+    }
+
+    .hero-badge span {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--cyan);
+      letter-spacing: 0.5px;
+    }
+
+    .hero-title {
+      margin-bottom: 8px;
+    }
+
+    .hero-word-wrap {
+      height: 1.08em;
+      overflow: hidden;
+      display: block;
+    }
+
+    .hero-word {
+      display: block;
+      background: linear-gradient(135deg, var(--cyan) 0%, #A78BFA 60%, #60A5FA 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: wordIn 0.5s cubic-bezier(0.16,1,0.3,1) forwards;
+    }
+
+    @keyframes wordIn {
+      from { transform: translateY(100%); opacity: 0; filter: blur(8px); }
+      to   { transform: translateY(0);    opacity: 1; filter: blur(0); }
+    }
+
+    .hero-word.out {
+      animation: wordOut 0.4s cubic-bezier(0.5,0,1,0.5) forwards;
+    }
+
+    @keyframes wordOut {
+      from { transform: translateY(0);     opacity: 1; filter: blur(0); }
+      to   { transform: translateY(-100%); opacity: 0; filter: blur(6px); }
+    }
+
+    .hero-sub {
+      font-size: 18px;
+      line-height: 1.65;
+      color: var(--text2);
+      margin-bottom: 36px;
+      max-width: 420px;
+    }
+
+    .hero-trust {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 40px;
+    }
+
+    .trust-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border2);
+      border-radius: 50px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text2);
+    }
+
+    .trust-chip svg { opacity: 0.7; }
+
+    .hero-ctas {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 28px;
+      background: linear-gradient(135deg, var(--cyan), #60A5FA);
+      border-radius: 50px;
+      color: #07090D;
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 36px rgba(56,189,248,0.40);
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 28px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border2);
+      border-radius: 50px;
+      color: var(--text1);
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.2s, border-color 0.2s, transform 0.2s;
+      cursor: pointer;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.2);
+      transform: translateY(-1px);
+    }
+
+    /* ─── Phone Mockup ──────────────────────────────────────────── */
+    .hero-right {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    .phone-scene {
+      position: relative;
+      width: 300px;
+    }
+
+    .phone-glow {
+      position: absolute;
+      inset: -60px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(56,189,248,0.15) 0%, rgba(167,139,250,0.10) 50%, transparent 70%);
+      filter: blur(40px);
+      animation: phone-glow-pulse 3s ease-in-out infinite;
+    }
+
+    @keyframes phone-glow-pulse {
+      0%, 100% { opacity: 0.7; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.05); }
+    }
+
+    .phone-frame {
+      position: relative;
+      width: 300px;
+      border-radius: 44px;
+      background: #111827;
+      box-shadow:
+        0 0 0 1.5px #2A3548,
+        0 0 0 6px #0A0F1A,
+        0 40px 80px rgba(0,0,0,0.7),
+        0 0 0 7px #141E30;
+      overflow: hidden;
+      animation: phone-float 4s ease-in-out infinite;
+    }
+
+    @keyframes phone-float {
+      0%, 100% { transform: translateY(0px) rotate(-1deg); }
+      50% { transform: translateY(-12px) rotate(-1deg); }
+    }
+
+    .phone-notch {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100px;
+      height: 28px;
+      background: #0A0F1A;
+      border-radius: 0 0 18px 18px;
+      z-index: 10;
+    }
+
+    .phone-frame img {
+      width: 100%;
+      display: block;
+    }
+
+    .phone-shadow-card {
+      position: absolute;
+      bottom: -24px;
+      left: 12px;
+      right: 12px;
+      height: 24px;
+      background: rgba(56,189,248,0.08);
+      border-radius: 50%;
+      filter: blur(16px);
+    }
+
+    /* Second phone (tilted back) */
+    .phone-back {
+      position: absolute;
+      width: 260px;
+      border-radius: 40px;
+      background: #0F172A;
+      box-shadow:
+        0 0 0 1px #1E293B,
+        0 20px 40px rgba(0,0,0,0.5);
+      overflow: hidden;
+      top: 30px;
+      right: -60px;
+      transform: rotate(8deg);
+      opacity: 0.5;
+      z-index: -1;
+    }
+
+    .phone-back img { width: 100%; display: block; }
+
+    /* Raw phone screenshots — Samsung hardware frame baked into image */
+    .phone-scene-raw {
+      position: relative;
+      width: 300px;
+    }
+
+    .phone-scene-raw img {
+      width: 100%;
+      display: block;
+      filter: drop-shadow(0 40px 80px rgba(0,0,0,0.75));
+      animation: phone-float 4s ease-in-out infinite;
+    }
+
+    .phone-back-raw {
+      position: absolute;
+      width: 230px;
+      top: 30px;
+      right: -50px;
+      transform: rotate(8deg);
+      opacity: 0.45;
+      z-index: -1;
+    }
+
+    .phone-back-raw img {
+      width: 100%;
+      display: block;
+      filter: blur(1.5px) drop-shadow(0 20px 40px rgba(0,0,0,0.5));
+    }
+
+    .feature-phone-raw {
+      width: 260px;
+      display: block;
+      filter: drop-shadow(0 30px 60px rgba(0,0,0,0.65));
+      transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    }
+
+    .feature-phone-raw:hover {
+      transform: scale(1.02) translateY(-4px);
+    }
+
+    .review-phone-raw { position: absolute; }
+    .review-phone-raw img { width: 100%; display: block; }
+
+    .rpc-main-raw {
+      width: 260px;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 3;
+      filter: drop-shadow(0 40px 80px rgba(0,0,0,0.7));
+    }
+
+    .rpc-left-raw {
+      width: 215px;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-160%) rotate(-8deg);
+      opacity: 0.55;
+      z-index: 2;
+      filter: blur(1px) drop-shadow(0 20px 40px rgba(0,0,0,0.5));
+    }
+
+    .rpc-right-raw {
+      width: 200px;
+      top: 60px;
+      left: 50%;
+      transform: translateX(50%) rotate(8deg);
+      opacity: 0.38;
+      z-index: 1;
+      filter: blur(2px) drop-shadow(0 20px 40px rgba(0,0,0,0.4));
+    }
+
+    /* ─── METRICS STRIP ─────────────────────────────────────────── */
+    .metrics-strip {
+      padding: 48px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .metrics-inner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 60px;
+      flex-wrap: wrap;
+    }
+
+    .metric-item { text-align: center; }
+
+    .metric-value {
+      font-size: 38px;
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .metric-label {
+      font-size: 13px;
+      color: var(--text3);
+      font-weight: 500;
+    }
+
+    .metric-divider {
+      width: 1px;
+      height: 48px;
+      background: var(--border2);
+    }
+
+    /* ─── SECTION COMMONS ────────────────────────────────────────── */
+    .section-label-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .section-label-line {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, var(--cyan), transparent);
+      max-width: 60px;
+    }
+
+    /* ─── FEATURE SECTIONS ──────────────────────────────────────── */
+    .feature-section {
+      padding: 120px 0;
+      overflow: hidden;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 100px;
+      align-items: center;
+    }
+
+    .feature-grid.reverse { direction: rtl; }
+    .feature-grid.reverse > * { direction: ltr; }
+
+    .feature-copy { }
+
+    .feature-headline {
+      margin-bottom: 16px;
+    }
+
+    .feature-body {
+      margin-bottom: 32px;
+    }
+
+    .feature-bullets {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .feature-bullets li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--text2);
+      line-height: 1.5;
+    }
+
+    .bullet-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ─── Phone visual (feature) ────────────────────────────────── */
+    .feature-phone-wrap {
+      display: flex;
+      justify-content: center;
+      position: relative;
+    }
+
+    .feature-phone {
+      width: 260px;
+      border-radius: 42px;
+      background: #111827;
+      box-shadow:
+        0 0 0 1.5px #2A3548,
+        0 0 0 5px #0A0F1A,
+        0 30px 60px rgba(0,0,0,0.6);
+      overflow: hidden;
+      position: relative;
+      transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    }
+
+    .feature-phone:hover {
+      transform: scale(1.02) translateY(-4px);
+    }
+
+    .feature-phone-notch {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90px;
+      height: 24px;
+      background: #0A0F1A;
+      border-radius: 0 0 14px 14px;
+      z-index: 10;
+    }
+
+    .feature-phone img {
+      width: 100%;
+      display: block;
+    }
+
+    .feature-phone-glow {
+      position: absolute;
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      filter: blur(60px);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    /* ─── REVIEW HERO ────────────────────────────────────────────── */
+    .review-hero {
+      padding: 120px 0;
+      background: linear-gradient(180deg, transparent 0%, rgba(167,139,250,0.04) 50%, transparent 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .review-hero-inner {
+      text-align: center;
+      max-width: 680px;
+      margin: 0 auto 64px;
+      padding: 0 24px;
+    }
+
+    .review-phone-group {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: -20px;
+      position: relative;
+      height: 600px;
+    }
+
+    .review-phone-card {
+      position: absolute;
+      border-radius: 42px;
+      background: #111827;
+      box-shadow:
+        0 0 0 1.5px #2A3548,
+        0 0 0 5px #0A0F1A,
+        0 40px 80px rgba(0,0,0,0.7);
+      overflow: hidden;
+    }
+
+    .review-phone-card img { width: 100%; display: block; }
+
+    .rpc-main {
+      width: 260px;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 3;
+    }
+
+    .rpc-left {
+      width: 230px;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-160%) rotate(-8deg);
+      opacity: 0.55;
+      z-index: 2;
+      filter: blur(1px);
+    }
+
+    .rpc-right {
+      width: 220px;
+      top: 60px;
+      left: 50%;
+      transform: translateX(50%) rotate(8deg);
+      opacity: 0.40;
+      z-index: 1;
+      filter: blur(2px);
+    }
+
+    /* ─── HOW IT WORKS ──────────────────────────────────────────── */
+    .how-section {
+      padding: 120px 0;
+    }
+
+    .how-header {
+      text-align: center;
+      max-width: 560px;
+      margin: 0 auto 56px;
+    }
+
+    /* How-it-works headline clip wrappers */
+    .how-line-wrap {
+      display: block;
+      overflow: hidden;
+      line-height: 1.2;
+    }
+
+    .how-line-inner {
+      display: block;
+    }
+
+    /* Progress track above the steps */
+    .how-progress {
+      height: 2px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 2px 2px 0 0;
+      overflow: hidden;
+      margin-bottom: 0;
+    }
+
+    .how-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), var(--purple));
+      border-radius: 2px;
+      transform-origin: left center;
+    }
+
+    .how-steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      background: var(--border);
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .how-step {
+      background: var(--surface);
+      padding: 40px 32px;
+      position: relative;
+      transition: background 0.22s ease;
+    }
+
+    .how-step:hover {
+      background: rgba(30, 40, 65, 0.95);
+    }
+
+    .how-step-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      transition: transform 0.22s ease;
+    }
+
+    .how-step:hover .how-step-icon {
+      transform: scale(1.08);
+    }
+
+    .how-step-number {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--text3);
+      margin-bottom: 20px;
+    }
+
+    .how-step h3 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      margin-bottom: 10px;
+      color: var(--text1);
+    }
+
+    .how-step p {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--text2);
+    }
+
+    /* Arrows are absolute children of .how-steps, sitting over the gap lines */
+    .how-step-arrow {
+      position: absolute;
+      top: calc(50% - 12px);
+      width: 24px;
+      height: 24px;
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+
+    #how-arrow-1 { left: calc(33.333% - 12px); }
+    #how-arrow-2 { left: calc(66.666% - 12px); }
+
+    /* ─── FEATURES GRID ─────────────────────────────────────────── */
+    .features-grid-section {
+      height: 440vh;
+    }
+
+    .features-grid-sticky {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .ei-bg-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      pointer-events: none;
+      z-index: 0;
+      padding: 0 40px;
+    }
+
+    .ei-bg-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: rgba(56,189,248,0.18);
+      margin-bottom: 28px;
+    }
+
+    .ei-bg-headline {
+      font-size: clamp(48px, 8.5vw, 108px);
+      font-weight: 800;
+      letter-spacing: -1px;
+      line-height: 1.45;
+      color: rgba(248,250,252,0.04);
+      margin-bottom: 36px;
+    }
+
+    .ei-bg-sub {
+      font-size: clamp(13px, 1.3vw, 16px);
+      color: rgba(248,250,252,0.05);
+      max-width: 500px;
+      line-height: 2.2;
+      letter-spacing: 0.5px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      background: transparent;
+      width: calc(100% - 80px);
+      max-width: 1020px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .feature-card {
+      background: transparent;           /* GSAP fills this on scroll */
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 16px;
+      padding: 22px 20px;
+      opacity: 0;                         /* GSAP reveals on scroll */
+      backdrop-filter: blur(16px) saturate(140%);
+      -webkit-backdrop-filter: blur(16px) saturate(140%);
+    }
+
+    /* header row: title left, icon right */
+    .fcard-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .feature-card-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .feature-card h3 {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.1px;
+      color: var(--text1);
+      margin: 0;
+    }
+
+    .feature-card p {
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text2);
+      margin: 0;
+    }
+
+    /* ─── PHILOSOPHY ────────────────────────────────────────────── */
+    .philosophy-section {
+      padding: 160px 0;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .philosophy-orb-1 {
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(56,189,248,0.06) 0%, transparent 60%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .philosophy-quote {
+      font-size: clamp(36px, 6vw, 72px);
+      font-weight: 800;
+      letter-spacing: -2px;
+      line-height: 1.1;
+      max-width: 800px;
+      margin: 0 auto 28px;
+    }
+
+    .philosophy-sub {
+      font-size: 18px;
+      color: var(--text2);
+      max-width: 480px;
+      margin: 0 auto;
+      line-height: 1.65;
+    }
+
+    /* ─── DOWNLOAD CTA ──────────────────────────────────────────── */
+    .download-section {
+      padding: 120px 0;
+    }
+
+    .download-card {
+      background: linear-gradient(135deg, rgba(56,189,248,0.08) 0%, rgba(167,139,250,0.08) 100%);
+      border: 1px solid rgba(56,189,248,0.15);
+      border-radius: var(--radius-xl);
+      padding: 80px 60px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .download-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(56,189,248,0.4), transparent);
+    }
+
+    .download-card h2 {
+      font-size: clamp(32px, 5vw, 56px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 20px;
+    }
+
+    .download-card p {
+      font-size: 17px;
+      color: var(--text2);
+      max-width: 420px;
+      margin: 0 auto 48px;
+      line-height: 1.65;
+    }
+
+    .store-buttons {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .store-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 28px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 16px;
+      color: var(--text1);
+      text-decoration: none;
+      transition: background 0.2s, border-color 0.2s, transform 0.2s;
+      min-width: 200px;
+    }
+
+    .store-btn:hover {
+      background: rgba(255,255,255,0.10);
+      border-color: rgba(255,255,255,0.22);
+      transform: translateY(-2px);
+    }
+
+    .store-btn-icon { flex-shrink: 0; }
+
+    .store-btn-text { text-align: left; }
+
+    .store-btn-sub {
+      font-size: 11px;
+      color: var(--text3);
+      display: block;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+
+    .store-btn-name {
+      font-size: 17px;
+      font-weight: 700;
+      display: block;
+      line-height: 1;
+    }
+
+    .store-note {
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--text3);
+    }
+
+    /* ─── FOOTER ────────────────────────────────────────────────── */
+    footer {
+      padding: 48px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .footer-logo { display: flex; align-items: center; gap: 8px; }
+
+    .footer-copy {
+      font-size: 13px;
+      color: var(--text3);
+    }
+
+    .footer-tagline {
+      font-size: 12px;
+      color: var(--text3);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+
+    /* ─── Reveal animations ─────────────────────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+
+    /* ─── Responsive ────────────────────────────────────────────── */
+
+    /* ── Tablet (≤ 900px) ───────────────────────────────── */
+    @media (max-width: 900px) {
+      /* Nav */
+      .nav-cta { padding: 9px 16px; font-size: 12px; }
+
+      /* Hero */
+      .hero { padding: 100px 0 60px; min-height: auto; }
+      .hero-inner {
+        grid-template-columns: 1fr;
+        gap: 48px;
+        text-align: center;
+      }
+      .hero-sub { max-width: 100%; }
+      .hero-trust { justify-content: center; }
+      .hero-ctas  { justify-content: center; }
+      .hero-right { order: -1; }
+      .phone-back, .phone-back-raw { display: none; }
+      .phone-scene-raw { width: 240px; }
+
+      /* Metrics */
+      .metrics-strip { padding: 36px 0; }
+      .metrics-inner { gap: 36px; }
+      .metric-value  { font-size: 28px; }
+      .metric-divider { display: none; }
+
+      /* Feature sections */
+      .feature-section { padding: 72px 0; }
+      .feature-grid {
+        grid-template-columns: 1fr;
+        gap: 48px;
+        text-align: center;
+      }
+      .feature-grid.reverse { direction: ltr; }
+      .feature-phone-wrap   { order: -1; }
+      .feature-bullets li   { text-align: left; }
+      .feature-phone-raw    { width: 220px; }
+
+      /* Review section */
+      .review-hero { padding: 72px 0; }
+      .review-hero-inner { margin-bottom: 48px; }
+      .review-phone-group { height: 420px; }
+      .rpc-main-raw  { width: 200px; }
+      .rpc-left-raw  { width: 170px; }
+      .rpc-right-raw { width: 155px; }
+
+      /* Review callout 3-col inline grid → single column on tablet */
+      [style*="grid-template-columns:repeat(3,1fr)"] {
+        grid-template-columns: 1fr !important;
+      }
+
+      /* How it works */
+      .how-section { padding: 72px 0; }
+      .how-header   { margin-bottom: 48px; }
+      .how-steps    { grid-template-columns: 1fr; }
+      .how-step-arrow { display: none; }
+
+      /* Features grid (animated section) */
+      .features-grid-section { height: 280vh; }
+      .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        width: calc(100% - 48px);
+      }
+      .ei-bg-headline { font-size: clamp(36px, 7vw, 72px); }
+
+      /* Download */
+      .download-section { padding: 72px 0; }
+      .download-card { padding: 56px 32px; }
+      .store-buttons { flex-direction: column; align-items: center; }
+      .store-btn { min-width: 220px; }
+
+      /* Footer */
+      .footer-inner { flex-direction: column; text-align: center; }
+    }
+
+    /* ── Phone (≤ 600px) ────────────────────────────────── */
+    @media (max-width: 600px) {
+      /* Base spacing */
+      .container { padding: 0 16px; }
+
+      /* Nav */
+      .nav-inner { padding: 0 16px; }
+      .nav-logo-text { font-size: 12px; }
+
+      /* Hero */
+      .hero { padding: 88px 0 52px; }
+      .hero-inner { padding: 0 16px; gap: 40px; }
+      .hero-sub { font-size: 16px; }
+      .hero-ctas { flex-direction: column; gap: 10px; }
+      .btn-primary, .btn-secondary { justify-content: center; width: 100%; }
+      .trust-chip { font-size: 11px; padding: 5px 10px; }
+      .hero-badge { margin-bottom: 20px; }
+      .phone-scene-raw { width: 200px; }
+
+      /* Metrics */
+      .metrics-inner { gap: 24px; flex-direction: column; }
+      .metric-value  { font-size: 32px; }
+
+      /* Feature sections */
+      .feature-section { padding: 56px 0; }
+      .feature-grid { gap: 36px; }
+      .feature-phone-raw { width: 200px; }
+      .feature-phone     { width: 200px; }
+      .headline-lg { font-size: clamp(20px, 5.5vw, 26px); }
+
+      /* Spaced repetition mini grid (inline) */
+      [style*="grid-template-columns:repeat(3,1fr)"] {
+        grid-template-columns: 1fr !important;
+      }
+
+      /* Review */
+      .review-hero { padding: 56px 0; }
+      .review-phone-group { height: 340px; }
+      .rpc-main-raw  { width: 160px; }
+      .rpc-left-raw  { display: none; }
+      .rpc-right-raw { display: none; }
+
+      /* How it works */
+      .how-section  { padding: 56px 0; }
+      .how-step     { padding: 28px 20px; }
+
+      /* Features grid — static layout on mobile, no scroll-pin */
+      .features-grid-section { height: auto; padding: 56px 0; }
+      .features-grid-sticky  { position: static; height: auto; overflow: visible; }
+      .ei-bg-text            { display: none; }
+      .features-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        width: calc(100% - 32px);
+      }
+      .feature-card { padding: 24px 20px; opacity: 1; background: rgba(15,23,42,0.88); }
+      .ei-bg-headline {
+        font-size: clamp(32px, 9vw, 52px);
+        letter-spacing: -1.5px;
+      }
+      .ei-bg-sub { font-size: 13px; }
+
+      /* Download */
+      .download-section  { padding: 56px 0; }
+      .download-card     { padding: 44px 20px; }
+      .download-card h2  { font-size: clamp(26px, 7vw, 40px); }
+      .download-card p   { font-size: 15px; }
+      .store-btn { min-width: 100%; }
+
+      /* Philosophy */
+      .philosophy-section  { padding: 80px 0; }
+      .philosophy-quote    { font-size: clamp(18px, 5.2vw, 24px); letter-spacing: -1px; }
+
+      /* Download CTA */
+      .download-card h2    { font-size: clamp(22px, 5.8vw, 30px); }
+
+      /* Footer */
+      footer { padding: 36px 0; }
+      .footer-inner { gap: 14px; }
+    }
+
+    /* ── Tiny (≤ 400px) ─────────────────────────────────── */
+    @media (max-width: 400px) {
+      .hero-inner { padding: 0 12px; }
+      .headline-xl { letter-spacing: -1.5px; }
+      .headline-lg { letter-spacing: -1px; }
+      .phone-scene-raw { width: 180px; }
+      .features-grid { gap: 12px; }
+      .feature-card  { padding: 20px 16px; }
+      .feature-card h3 { font-size: 15px; }
+      .feature-card p  { font-size: 12px; }
+    }
+  </style>
+
+  <!-- Structured Data: FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Does Recallr require an internet connection?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. All data is stored locally on your device. You only need internet to open a link in the built-in reader."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is spaced repetition and how does it apply to saved links?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Spaced repetition schedules review at increasing intervals based on how well you remember something. Recallr applies this to saved links — frequently forgotten links come back sooner, well-remembered ones give you a longer break."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does the app remind me about a specific link I should read?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The home screen surfaces specific links via 'Remember This?' and 'Read Next' cards. Daily notifications are general reminders to open your review queue."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How is Recallr different from Pocket or Instapaper?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Unlike standard read-it-later apps, Recallr uses spaced repetition to actively resurface forgotten saves and track whether you remember them — not just archive them."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <!-- Structured Data: MobileApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "MobileApplication",
+    "name": "Recallr",
+    "operatingSystem": "Android",
+    "applicationCategory": "ProductivityApplication",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "description": "Offline link manager with spaced repetition that resurfaces your saved links so you never forget what you saved.",
+    "featureList": [
+      "Spaced repetition review queue",
+      "Discover Mode — resurfaces forgotten saves",
+      "Offline, no account required",
+      "Personal notes and highlights visible during review",
+      "Daily reminders",
+      "Reading streak tracking",
+      "Tag-based collections"
+    ]
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ── NAV ─────────────────────────────────────────────────────── -->
+  <nav id="nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <div class="nav-logo-dot"></div>
+        <span class="nav-logo-text">RECALLR</span>
+      </a>
+      <a href="#download" class="nav-cta">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="#07090D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Download APK
+      </a>
+    </div>
+  </nav>
+
+  <!-- ── HERO ──────────────────────────────────────────────────────── -->
+  <section class="hero">
+    <!-- Background orbs -->
+    <div class="orb" style="width:600px;height:600px;background:radial-gradient(circle,rgba(56,189,248,0.08) 0%,transparent 70%);top:-100px;left:-200px;"></div>
+    <div class="orb" style="width:500px;height:500px;background:radial-gradient(circle,rgba(167,139,250,0.07) 0%,transparent 70%);top:200px;right:-150px;"></div>
+
+    <div class="hero-inner">
+      <div class="hero-left">
+        <div class="hero-badge reveal">
+          <div class="hero-badge-dot"></div>
+          <span>Save once. Rediscover forever.</span>
+        </div>
+
+        <h1 class="headline-xl hero-title reveal reveal-delay-1">
+          Your Mind,
+          <span class="hero-word-wrap">
+            <span class="hero-word" id="hero-word">Supercharged.</span>
+          </span>
+        </h1>
+
+        <p class="hero-sub reveal reveal-delay-2">
+          The offline knowledge vault that brings your saved links back to life —
+          with built-in spaced repetition, full-text search, and an in-app reader.
+        </p>
+
+        <div class="hero-trust reveal reveal-delay-2">
+          <div class="trust-chip">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M6 1L7.5 4.5L11 5L8.5 7.5L9 11L6 9.5L3 11L3.5 7.5L1 5L4.5 4.5L6 1Z" fill="#38BDF8" opacity="0.8"/>
+            </svg>
+            100% Offline
+          </div>
+          <div class="trust-chip">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <rect x="1.5" y="5" width="9" height="6.5" rx="1.5" stroke="#A78BFA" stroke-width="1.2" opacity="0.8"/>
+              <path d="M3.5 5V3.5a2.5 2.5 0 015 0V5" stroke="#A78BFA" stroke-width="1.2" stroke-linecap="round" opacity="0.8"/>
+            </svg>
+            Zero Account
+          </div>
+          <div class="trust-chip">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M6 1L7.5 4.5L11 5.5L8.5 8L9.5 11L6 9.5L2.5 11L3.5 8L1 5.5L4.5 4.5L6 1Z" stroke="#34D399" stroke-width="1.2" fill="none" opacity="0.8"/>
+            </svg>
+            Data stays on your device
+          </div>
+          <div class="trust-chip">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2 6h8M6 2l4 4-4 4" stroke="#FBBF24" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+            </svg>
+            SM-2 Spaced Repetition
+          </div>
+        </div>
+
+        <div class="hero-ctas reveal reveal-delay-3">
+          <a href="#download" class="btn-primary">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M9 2.25v10.5M5.25 9.75L9 13.5l3.75-3.75M3.75 15.75h10.5" stroke="#07090D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Download APK
+          </a>
+          <a href="#features" class="btn-secondary">
+            See how it works
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8h10M9 5l4 3-4 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+
+      <div class="hero-right reveal reveal-delay-2">
+        <!-- Back phone -->
+        <div class="phone-back-raw">
+          <!-- SCREENSHOT NEEDED: screenshots/search-dark.png — search results screen with active query, 1080×2340px, Samsung hardware frame baked in -->
+          <img src="screenshots/search-dark.png" alt="Recallr Search" loading="lazy">
+        </div>
+
+        <!-- Main phone (home screen) -->
+        <div class="phone-scene-raw">
+          <div class="phone-glow"></div>
+          <!-- SCREENSHOT NEEDED: screenshots/home-dark.png — home screen showing Remember This? card and reading streak, 1080×2340px, Samsung hardware frame baked in -->
+          <img src="screenshots/home-dark.png" alt="Recallr Home Screen" fetchpriority="high" loading="eager">
+          <div class="phone-shadow-card"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── METRICS STRIP ─────────────────────────────────────────────── -->
+  <section class="metrics-strip">
+    <div class="metrics-inner">
+      <div class="metric-item reveal">
+        <div class="metric-value gradient-text">∞</div>
+        <div class="metric-label">Links you can save</div>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item reveal reveal-delay-1">
+        <div class="metric-value" style="color:var(--green);">SM-2</div>
+        <div class="metric-label">Spaced repetition algorithm</div>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item reveal reveal-delay-2">
+        <div class="metric-value gradient-text-amber">0</div>
+        <div class="metric-label">Accounts required</div>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item reveal reveal-delay-3">
+        <div class="metric-value" style="color:var(--purple);">4</div>
+        <div class="metric-label">Highlight colors in reader</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FEATURE: SAVE ─────────────────────────────────────────────── -->
+  <section class="feature-section" id="features">
+    <div class="orb" style="width:400px;height:400px;background:radial-gradient(circle,rgba(56,189,248,0.07) 0%,transparent 70%);top:50%;left:-100px;transform:translateY(-50%);"></div>
+    <div class="container">
+      <div class="feature-grid">
+        <div class="feature-copy reveal">
+          <div class="section-label-row">
+            <div class="section-label-line"></div>
+            <span class="label">Save</span>
+          </div>
+          <h2 class="headline-lg feature-headline">
+            Paste a URL.<br>Done.
+          </h2>
+          <p class="body-lg feature-body">
+            Recallr auto-fetches the title, thumbnail, description,
+            and favicon. No typing, no manual tagging unless you want it.
+            Share directly from your browser to save in seconds.
+          </p>
+          <ul class="feature-bullets">
+            <li>
+              <div class="bullet-icon" style="background:var(--cyan-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#38BDF8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Auto-fetches title, image, domain, and description
+            </li>
+            <li>
+              <div class="bullet-icon" style="background:var(--cyan-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#38BDF8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Android share sheet — save from any app without opening Recallr
+            </li>
+            <li>
+              <div class="bullet-icon" style="background:var(--cyan-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#38BDF8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Filter by Unread, Favorites, or sort by date — search finds everything else
+            </li>
+            <li>
+              <div class="bullet-icon" style="background:var(--cyan-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#38BDF8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Organize into Collections and Tags — or don't. Search finds everything.
+            </li>
+          </ul>
+        </div>
+
+        <div class="feature-phone-wrap reveal reveal-delay-1">
+          <div class="feature-phone-glow" style="background:radial-gradient(circle,rgba(56,189,248,0.20) 0%,transparent 70%);"></div>
+          <!-- SCREENSHOT NEEDED: screenshots/save-dark.png — paste URL / add link screen, 1080×2340px, Samsung hardware frame baked in -->
+          <img class="feature-phone-raw" src="screenshots/save-dark.png" alt="Recallr — Save Link" loading="lazy">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FEATURE: SEARCH ───────────────────────────────────────────── -->
+  <section class="feature-section" style="background:linear-gradient(180deg,transparent 0%,rgba(52,211,153,0.03) 50%,transparent 100%);">
+    <div class="container">
+      <div class="feature-grid reverse">
+        <div class="feature-copy reveal">
+          <div class="section-label-row">
+            <div class="section-label-line" style="background:linear-gradient(90deg,var(--green),transparent);"></div>
+            <span class="label" style="color:var(--green);">Search</span>
+          </div>
+          <h2 class="headline-lg feature-headline">
+            Search your brain,<br>not a folder tree.
+          </h2>
+          <p class="body-lg feature-body">
+            Full-text search across titles, descriptions, your personal notes,
+            and even text you highlighted inside articles. Isar trigram indexing
+            means results are instant — no server, no waiting.
+          </p>
+          <ul class="feature-bullets">
+            <li>
+              <div class="bullet-icon" style="background:var(--green-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#34D399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Matches across titles, descriptions, notes, and highlights
+            </li>
+            <li>
+              <div class="bullet-icon" style="background:var(--green-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#34D399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Filter by Unread, Favorites, or sort by date / last opened
+            </li>
+            <li>
+              <div class="bullet-icon" style="background:var(--green-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#34D399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Matched snippet shown in context with the exact word highlighted
+            </li>
+            <li>
+              <div class="bullet-icon" style="background:var(--green-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#34D399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Fully offline — every search runs on your device
+            </li>
+          </ul>
+        </div>
+
+        <div class="feature-phone-wrap reveal reveal-delay-1">
+          <div class="feature-phone-glow" style="background:radial-gradient(circle,rgba(52,211,153,0.18) 0%,transparent 70%);"></div>
+          <!-- SCREENSHOT NEEDED: screenshots/search-dark.png — search results screen with matched snippet highlighted, 1080×2340px, Samsung hardware frame baked in -->
+          <img class="feature-phone-raw" src="screenshots/search-dark.png" alt="Recallr Search" loading="lazy">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FEATURE: REVIEW (Hero treatment) ─────────────────────────── -->
+  <section class="review-hero" id="review">
+    <div class="orb" style="width:700px;height:700px;background:radial-gradient(circle,rgba(167,139,250,0.08) 0%,transparent 60%);top:50%;left:50%;transform:translate(-50%,-50%);"></div>
+
+    <div class="review-hero-inner reveal">
+      <div class="section-label-row" style="justify-content:center;">
+        <div class="section-label-line" style="background:linear-gradient(90deg,var(--purple),transparent);"></div>
+        <span class="label" style="color:var(--purple);">Spaced Repetition</span>
+        <div class="section-label-line" style="background:linear-gradient(270deg,var(--purple),transparent);"></div>
+      </div>
+      <h2 class="headline-lg" style="margin-bottom:20px;">
+        The only bookmark app<br>that makes you<br>
+        <span style="background:linear-gradient(135deg,var(--purple),#38BDF8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">actually remember things.</span>
+      </h2>
+      <p class="body-lg">
+        SM-2 schedules every saved link for review at the exact moment
+        you're about to forget it. Swipe right if it stuck. Swipe left to see it again tomorrow.
+        The algorithm handles the rest.
+      </p>
+    </div>
+
+    <div class="container">
+      <div class="review-phone-group reveal">
+        <!-- Ghost card left -->
+        <div class="review-phone-raw rpc-left-raw">
+          <!-- SCREENSHOT NEEDED: screenshots/library-dark.png — library / all links list view, 1080×2340px, Samsung hardware frame baked in -->
+          <img src="screenshots/library-dark.png" alt="" loading="lazy">
+        </div>
+        <!-- Ghost card right -->
+        <div class="review-phone-raw rpc-right-raw">
+          <!-- SCREENSHOT NEEDED: screenshots/profile-dark.png — profile or settings screen, 1080×2340px, Samsung hardware frame baked in -->
+          <img src="screenshots/profile-dark.png" alt="" loading="lazy">
+        </div>
+        <!-- Main card -->
+        <div class="review-phone-raw rpc-main-raw">
+          <!-- SCREENSHOT NEEDED: screenshots/home-dark.png — home screen (same file as hero), 1080×2340px, Samsung hardware frame baked in -->
+          <img src="screenshots/home-dark.png" alt="Recallr — Your Knowledge Vault" loading="lazy">
+        </div>
+      </div>
+
+      <!-- Review feature callouts -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-top:60px;">
+        <div style="background:var(--surface);padding:28px 24px;">
+          <div style="width:36px;height:36px;border-radius:10px;background:rgba(248,113,113,0.12);display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1L2 14h12L8 1Z" stroke="#F87171" stroke-width="1.3" stroke-linejoin="round"/><path d="M8 6v4M8 11.5v.5" stroke="#F87171" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </div>
+          <h4 style="font-size:15px;font-weight:700;margin-bottom:6px;color:var(--text1);">Swipe left — Forgot</h4>
+          <p style="font-size:13px;color:var(--text2);line-height:1.55;">Reappears tomorrow. The algorithm treats this as a reset.</p>
+        </div>
+        <div style="background:var(--surface);padding:28px 24px;">
+          <div style="width:36px;height:36px;border-radius:10px;background:var(--cyan-dim);display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l4 4 8-8" stroke="#38BDF8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h4 style="font-size:15px;font-weight:700;margin-bottom:6px;color:var(--text1);">Swipe right — OK</h4>
+          <p style="font-size:13px;color:var(--text2);line-height:1.55;">Back in a few days. Interval grows each time you remember.</p>
+        </div>
+        <div style="background:var(--surface);padding:28px 24px;">
+          <div style="width:36px;height:36px;border-radius:10px;background:var(--green-dim);display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2l1.2 3.6H13l-3 2.2 1.1 3.5L8 9.2l-3.1 2.1 1.1-3.5L3 5.6h3.8L8 2Z" stroke="#34D399" stroke-width="1.2" stroke-linejoin="round"/></svg>
+          </div>
+          <h4 style="font-size:15px;font-weight:700;margin-bottom:6px;color:var(--text1);">Swipe right — Easy</h4>
+          <p style="font-size:13px;color:var(--text2);line-height:1.55;">Long break. Won't reappear for weeks. You've locked it in.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FEATURE: READER ───────────────────────────────────────────── -->
+  <section class="feature-section">
+    <div class="orb" style="width:400px;height:400px;background:radial-gradient(circle,rgba(251,191,36,0.06) 0%,transparent 70%);top:50%;right:-100px;transform:translateY(-50%);"></div>
+    <div class="container">
+      <div class="feature-grid">
+        <div class="feature-copy reveal">
+          <div class="section-label-row">
+            <div class="section-label-line" style="background:linear-gradient(90deg,var(--amber),transparent);"></div>
+            <span class="label" style="color:var(--amber);">Reader + Highlights</span>
+          </div>
+          <h2 class="headline-lg feature-headline">
+            Read it right here.<br>Highlight what matters.
+          </h2>
+          <p class="body-lg feature-body">
+            Built-in reader mode strips ads and distractions from any article.
+            Long-press any text to highlight it in four colors. Add private notes.
+            Your highlights persist and reappear on every future visit — and they're
+            searchable.
+          </p>
+          <ul class="feature-bullets">
+            <li>
+              <div class="bullet-icon" style="background:var(--amber-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#FBBF24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Reader mode — clean dark typography, no distractions
+            </li>
+            <li>
+              <div class="bullet-icon" style="background:var(--amber-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#FBBF24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              4-color highlights that survive page reloads
+            </li>
+            <li>
+              <div class="bullet-icon" style="background:var(--amber-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#FBBF24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Attach private notes to any highlighted passage
+            </li>
+            <li>
+              <div class="bullet-icon" style="background:var(--amber-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#FBBF24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Highlights surface in your Review queue — the algorithm prioritizes them
+            </li>
+          </ul>
+        </div>
+
+        <div class="feature-phone-wrap reveal reveal-delay-1">
+          <div class="feature-phone-glow" style="background:radial-gradient(circle,rgba(251,191,36,0.15) 0%,transparent 70%);"></div>
+          <!-- SCREENSHOT NEEDED: screenshots/reader.png — reader mode with highlights visible on article text, 1080×2340px, Samsung hardware frame baked in -->
+          <img class="feature-phone-raw" src="screenshots/reader.png" alt="Recallr Reader Mode with highlights" loading="lazy">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── HOW IT WORKS ──────────────────────────────────────────────── -->
+  <section class="how-section" id="how-section-anim">
+    <div class="how-header">
+      <div class="section-label-row" style="justify-content:center; overflow:hidden; height:1.6em;">
+        <span id="how-label-inner" class="label" style="display:inline-block;">How it works</span>
+      </div>
+      <h2 class="headline-lg" style="margin-bottom:16px;margin-top:16px;">
+        <span class="how-line-wrap"><span class="how-line-inner">Three habits.</span></span>
+        <span class="how-line-wrap"><span class="how-line-inner">One app.</span></span>
+      </h2>
+      <p class="body-md" id="how-sub">
+        Most bookmark managers die in a graveyard of unread tabs.
+        Recallr's built-in loop pulls your knowledge forward every day.
+      </p>
+    </div>
+
+    <div class="container">
+      <div class="how-progress">
+        <div class="how-progress-fill" id="how-progress-fill"></div>
+      </div>
+      <div class="how-steps">
+        <div class="how-step" id="how-step-1">
+          <div class="how-step-number">01</div>
+          <div class="how-step-icon" style="background:var(--cyan-dim);">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <path d="M11 4L13 9H18L14 12.5L15.5 17.5L11 14.5L6.5 17.5L8 12.5L4 9H9L11 4Z" stroke="#38BDF8" stroke-width="1.4" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h3>Save anything</h3>
+          <p>Share from any app on Android, or paste a URL. Recallr fetches everything automatically and auto-tags by content type.</p>
+        </div>
+
+        <div class="how-step" id="how-step-2">
+          <div class="how-step-number">02</div>
+          <div class="how-step-icon" style="background:var(--purple-dim);">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <rect x="3" y="5" width="16" height="12" rx="3" stroke="#A78BFA" stroke-width="1.4"/>
+              <path d="M8 10h6M8 13h4" stroke="#A78BFA" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <h3>Read and highlight</h3>
+          <p>Open any link inside Recallr's built-in reader. Strip the noise. Highlight what matters. Add private notes to any passage.</p>
+        </div>
+
+        <div class="how-step" id="how-step-3">
+          <div class="how-step-number">03</div>
+          <div class="how-step-icon" style="background:var(--amber-dim);">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <path d="M11 3C7.5 3 4 6 4 11s3.5 8 7 8 7-3 7-8-3.5-8-7-8z" stroke="#FBBF24" stroke-width="1.4"/>
+              <path d="M11 7v4l3 2" stroke="#FBBF24" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h3>Review at the right time</h3>
+          <p>SM-2 schedules every saved link for review just before you'd forget it. Daily reminders keep your streak alive.</p>
+        </div>
+
+        <!-- Arrows are absolute children of .how-steps, centered over the gap lines -->
+        <div class="how-step-arrow" id="how-arrow-1">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5h6M5 2l3 3-3 3" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="how-step-arrow" id="how-arrow-2">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5h6M5 2l3 3-3 3" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ALL FEATURES GRID ─────────────────────────────────────────── -->
+  <section class="features-grid-section" id="features-grid-section">
+    <div class="features-grid-sticky" id="features-grid-sticky">
+
+      <!-- Background text (scroll-animated) -->
+      <div class="ei-bg-text" id="ei-bg-text">
+        <div class="ei-bg-label">Everything included</div>
+        <div class="ei-bg-headline">Built for people who<br>actually read things.</div>
+        <div class="ei-bg-sub">No subscriptions. No upsells. Everything is here, free, and works offline.</div>
+      </div>
+
+      <div class="features-grid" id="features-grid">
+
+        <div class="feature-card ei-card">
+          <div class="fcard-header">
+            <h3>Spaced Repetition</h3>
+            <div class="feature-card-icon" style="background:var(--cyan-dim);">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 3l2 5h5l-4 3 1.5 5L10 13l-4.5 3L7 11 3 8h5L10 3Z" stroke="#38BDF8" stroke-width="1.3" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+          <p>SM-2 algorithm schedules every link for review at the exact moment you need it. The more you remember, the longer the interval.</p>
+        </div>
+
+        <div class="feature-card ei-card">
+          <div class="fcard-header">
+            <h3>Full-Text Search</h3>
+            <div class="feature-card-icon" style="background:var(--green-dim);">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="#34D399" stroke-width="1.3"/><path d="M13 13l3.5 3.5" stroke="#34D399" stroke-width="1.4" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+          <p>Search across titles, descriptions, your notes, and highlights. Isar trigram indexing. Instant. Offline. Zero server.</p>
+        </div>
+
+        <div class="feature-card ei-card">
+          <div class="fcard-header">
+            <h3>Built-in Reader Mode</h3>
+            <div class="feature-card-icon" style="background:var(--purple-dim);">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="3" y="4" width="14" height="12" rx="2.5" stroke="#A78BFA" stroke-width="1.3"/><path d="M7 9h6M7 12h4" stroke="#A78BFA" stroke-width="1.2" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+          <p>Strips ads and distractions from any article. Clean dark typography. Reads like a book, not a web page.</p>
+        </div>
+
+        <div class="feature-card ei-card">
+          <div class="fcard-header">
+            <h3>Collections</h3>
+            <div class="feature-card-icon" style="background:var(--amber-dim);">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M3 17V7l7-4 7 4v10" stroke="#FBBF24" stroke-width="1.3" stroke-linejoin="round"/><path d="M8 17v-5h4v5" stroke="#FBBF24" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+          <p>Group links into color-coded folders. Unsplash covers auto-matched by topic. Works like a filing cabinet that looks beautiful.</p>
+        </div>
+
+        <div class="feature-card ei-card">
+          <div class="fcard-header">
+            <h3>Rediscover Mode</h3>
+            <div class="feature-card-icon" style="background:rgba(248,113,113,0.12);">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 3.5C10 3.5 4 7 4 11.5a6 6 0 0012 0C16 7 10 3.5 10 3.5Z" stroke="#F87171" stroke-width="1.3" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+          <p>"Remember this?" surfaces a forgotten link from your saves on your home screen every day. Serendipity, by design.</p>
+        </div>
+
+        <div class="feature-card ei-card">
+          <div class="fcard-header">
+            <h3>Export Anytime</h3>
+            <div class="feature-card-icon" style="background:var(--cyan-dim);">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 3v14M4 10l6-6 6 6" stroke="#38BDF8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+          <p>Export all your links as JSON or CSV. Your data is yours. No lock-in, no deletion risk, no company to go bankrupt.</p>
+        </div>
+
+        <div class="feature-card ei-card">
+          <div class="fcard-header">
+            <h3>Reading Streaks</h3>
+            <div class="feature-card-icon" style="background:var(--amber-dim);">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 4l1.5 4.5H16l-3.7 2.7 1.4 4.3L10 12.5l-3.7 2.5 1.4-4.3L4 8.5h4.5L10 4Z" fill="#FBBF24" opacity="0.8"/></svg>
+            </div>
+          </div>
+          <p>Daily streak tracking keeps your habit alive. See your saves-per-day bar chart. Amber flame. Hard to ignore.</p>
+        </div>
+
+        <div class="feature-card ei-card">
+          <div class="fcard-header">
+            <h3>Color Highlights</h3>
+            <div class="feature-card-icon" style="background:var(--green-dim);">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M4 10h12M10 4l6 6-6 6" stroke="#34D399" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.8" transform="rotate(90,10,10)"/><rect x="3" y="3" width="14" height="14" rx="3" stroke="#34D399" stroke-width="1.2" opacity="0.5"/></svg>
+            </div>
+          </div>
+          <p>Highlight in yellow, green, blue, or pink. Add private notes to any passage. Highlights persist across visits.</p>
+        </div>
+
+        <div class="feature-card ei-card">
+          <div class="fcard-header">
+            <h3>Daily Reminders</h3>
+            <div class="feature-card-icon" style="background:var(--purple-dim);">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 3a7 7 0 100 14A7 7 0 0010 3z" stroke="#A78BFA" stroke-width="1.3"/><path d="M10 7v3l2.5 2.5" stroke="#A78BFA" stroke-width="1.3" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+          <p>Optional push notification fires at a time you choose — a daily nudge to open your review queue. No noise.</p>
+        </div>
+
+      </div>
+    </div><!-- /features-grid-sticky -->
+  </section>
+
+  <!-- ── PHILOSOPHY ─────────────────────────────────────────────────── -->
+  <section class="philosophy-section">
+    <div class="philosophy-orb-1"></div>
+    <div class="orb" style="width:300px;height:300px;background:radial-gradient(circle,rgba(167,139,250,0.08) 0%,transparent 70%);top:30%;left:20%;"></div>
+    <div class="container">
+      <p class="label" style="margin-bottom:24px;">Philosophy</p>
+      <h2 class="philosophy-quote reveal">
+        Your saves are worth<br>
+        <span style="background:linear-gradient(135deg,var(--cyan),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">remembering.</span>
+      </h2>
+      <p class="philosophy-sub reveal reveal-delay-1">
+        Most bookmark apps are digital graveyards. You save something promising,
+        never see it again, and your library silently rots.
+        Recallr is built on the opposite belief: that the links you save are worth
+        revisiting — and that a machine can help you do it at exactly the right time.
+      </p>
+      <div class="reveal reveal-delay-2" style="margin-top:48px;display:flex;align-items:center;justify-content:center;gap:32px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text3);">
+          <div style="width:28px;height:1px;background:var(--border2);"></div>
+          No cloud
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text3);">
+          <div style="width:28px;height:1px;background:var(--border2);"></div>
+          No account
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text3);">
+          <div style="width:28px;height:1px;background:var(--border2);"></div>
+          No subscription
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text3);">
+          <div style="width:28px;height:1px;background:var(--border2);"></div>
+          No bullshit
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── DOWNLOAD ───────────────────────────────────────────────────── -->
+  <section class="download-section" id="download">
+    <div class="container">
+      <div class="download-card reveal">
+        <!-- Decorative orbs inside the card -->
+        <div class="orb" style="width:400px;height:400px;background:radial-gradient(circle,rgba(56,189,248,0.10) 0%,transparent 65%);top:-100px;left:-100px;position:absolute;"></div>
+        <div class="orb" style="width:300px;height:300px;background:radial-gradient(circle,rgba(167,139,250,0.08) 0%,transparent 65%);bottom:-80px;right:-60px;position:absolute;"></div>
+
+        <div style="position:relative;z-index:2;">
+          <div class="label" style="margin-bottom:20px;">Free. Forever.</div>
+          <h2 class="headline-lg" style="margin-bottom:20px;">
+            Start building your<br>
+            <span style="background:linear-gradient(135deg,var(--cyan),#60A5FA);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">knowledge vault today.</span>
+          </h2>
+          <p style="font-size:17px;color:var(--text2);max-width:420px;margin:0 auto 40px;line-height:1.65;">
+            No sign-up. No subscription. Download the APK, install it, and you're in.
+          </p>
+
+          <!-- APK download button -->
+          <a href="apk/recallr-release.apk" download class="btn-primary" style="display:inline-flex;margin-bottom:20px;">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M10 2.5v10M6.25 9.25L10 13l3.75-3.75M3.75 16.5h12.5" stroke="#07090D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Download APK
+          </a>
+
+          <!-- Trust chips -->
+          <div style="display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 7l3 3 6-6" stroke="#34D399" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Android 8.0+
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 7l3 3 6-6" stroke="#34D399" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              No account needed
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 7l3 3 6-6" stroke="#34D399" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Works 100% offline
+            </div>
+          </div>
+
+          <p class="store-note">Enable "Install from unknown sources" in Android settings · iOS coming soon</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FOOTER ─────────────────────────────────────────────────────── -->
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-logo">
+          <div class="nav-logo-dot"></div>
+          <span class="nav-logo-text">RECALLR</span>
+        </div>
+        <p class="footer-copy">© 2026 Recallr · 100% Offline · Zero Cloud · Your data stays yours.</p>
+        <p class="footer-tagline">Built by <a href="https://github.com/sshhiivvamm" style="color:var(--text3);text-decoration:underline;text-underline-offset:3px;" target="_blank" rel="noopener">Shivam Pathak</a></p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ── SCRIPTS ────────────────────────────────────────────────────── -->
+  <script>
+    // ── Hero word cycle ───────────────────────────────────────────────
+    const words = ['Supercharged.', 'Engineered.', 'Organized.', 'Curated.', 'Amplified.'];
+    let wordIdx = 0;
+    const wordEl = document.getElementById('hero-word');
+
+    function cycleWord() {
+      wordEl.classList.add('out');
+      setTimeout(() => {
+        wordIdx = (wordIdx + 1) % words.length;
+        wordEl.textContent = words[wordIdx];
+        wordEl.classList.remove('out');
+      }, 380);
+    }
+
+    setInterval(cycleWord, 2500);
+
+    // ── Nav scroll state ─────────────────────────────────────────────
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 20);
+    }, { passive: true });
+
+    // ── Reveal on scroll ─────────────────────────────────────────────
+    const revealEls = document.querySelectorAll('.reveal');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          observer.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+    revealEls.forEach(el => observer.observe(el));
+
+    // ── Trigger visible for above-fold elements immediately ──────────
+    setTimeout(() => {
+      document.querySelectorAll('.hero .reveal').forEach(el => {
+        el.classList.add('visible');
+      });
+    }, 100);
+  </script>
+
+  <script>
+    gsap.registerPlugin(ScrollTrigger);
+
+    window.addEventListener('load', () => {
+      const cards    = gsap.utils.toArray('.ei-card');
+      const grid     = document.getElementById('features-grid');
+      const isMobile = window.innerWidth <= 600;
+
+      /* ── Mobile: simple fade-in, no scroll pin ─────────────────── */
+      if (isMobile) {
+        gsap.set('.ei-bg-headline', { color: 'rgba(248,250,252,0.55)' });
+        gsap.set('.ei-bg-label',    { color: 'rgba(56,189,248,0.55)'  });
+        gsap.set('.ei-bg-sub',      { color: 'rgba(248,250,252,0.40)' });
+        gsap.to(cards, {
+          opacity: 1, y: 0, duration: 0.5, ease: 'power2.out',
+          stagger: 0.05,
+          scrollTrigger: { trigger: grid, start: 'top 88%', once: true }
+        });
+        return;
+      }
+
+      /* ── Desktop: full scroll-driven timeline ───────────────────── */
+
+      // For each card, measure how far it sits from the grid centre.
+      // cX[i]/cY[i] = vector FROM card natural position → grid centre.
+      // Scatter position = opposite direction × 1.5  (off-screen, away from centre)
+      const gr  = grid.getBoundingClientRect();
+      const gCX = gr.width  / 2;
+      const gCY = gr.height / 2;
+
+      const cX = cards.map(c => {
+        const r = c.getBoundingClientRect();
+        return gCX - (r.left - gr.left + r.width  / 2);
+      });
+      const cY = cards.map(c => {
+        const r = c.getBoundingClientRect();
+        return gCY - (r.top  - gr.top  + r.height / 2);
+      });
+
+      // Scatter every card outward from centre, transparent
+      cards.forEach((card, i) => {
+        gsap.set(card, {
+          x: -cX[i] * 1.5,
+          y: -cY[i] * 1.5,
+          scale: 0.65,
+          opacity: 0,
+          backgroundColor: 'rgba(15,23,42,0)',
+        });
+      });
+
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: '#features-grid-section',
+          start: 'top top',
+          // finish animation 400px before pin releases → natural hold buffer
+          end: 'bottom-=400 top',
+          scrub: 1.2,
+        }
+      });
+
+      // ── 0 → 22%  Text brightens, cards still off-screen ──────────
+      tl.to('.ei-bg-headline', {
+        color: 'rgba(248,250,252,0.90)', duration: 0.22, ease: 'none'
+      }, 0)
+      .to('.ei-bg-label', {
+        color: 'rgba(56,189,248,0.85)',  duration: 0.22, ease: 'none'
+      }, 0)
+      .to('.ei-bg-sub', {
+        color: 'rgba(248,250,252,0.68)', duration: 0.22, ease: 'none'
+      }, 0)
+
+      // ── 22 → 52%  Cards fly in from scatter → land in grid spots ──
+      // Background fills from transparent → solid as they arrive
+      .to(cards, {
+        x: 0, y: 0,
+        scale: 1,
+        opacity: 1,
+        backgroundColor: 'rgba(15,23,42,0.88)',
+        duration: 0.30,
+        ease: 'power3.out',
+        stagger: { each: 0.018, from: 'edges' }
+      }, 0.22)
+
+      // ── 52 → 72%  HOLD — grid fully visible, scroll continues ─────
+
+      // ── 72 → 100%  Cards disperse back out, background drains ─────
+      .to(cards, {
+        x: i => -cX[i] * 1.5,
+        y: i => -cY[i] * 1.5,
+        scale: 0.65,
+        opacity: 0,
+        backgroundColor: 'rgba(15,23,42,0)',
+        duration: 0.28,
+        ease: 'power2.in',
+        stagger: { each: 0.014, from: 'center' }
+      }, 0.72)
+
+      // ── 72 → 100%  Text drifts up and fades ──────────────────────
+      .to('#ei-bg-text', {
+        yPercent: -20,
+        opacity: 0,
+        duration: 0.28,
+        ease: 'power1.in',
+      }, 0.72);
+    });
+
+    // ── HOW IT WORKS: animated entrance ──────────────────────────────
+    (function () {
+      if (window.innerWidth <= 600) return;
+      // Set initial hidden states
+      gsap.set('#how-label-inner', { yPercent: -130, opacity: 0 });
+      gsap.set('.how-line-inner',  { yPercent: 115 });
+      gsap.set('#how-sub',         { opacity: 0, y: 16 });
+      gsap.set('#how-progress-fill', { scaleX: 0, transformOrigin: 'left center' });
+      gsap.set('#how-step-1, #how-step-2, #how-step-3', { opacity: 0, y: 52 });
+      // Arrows are now absolute children of .how-steps — use transformOrigin center
+      gsap.set('#how-arrow-1, #how-arrow-2', { scale: 0, opacity: 0, transformOrigin: 'center center' });
+      gsap.set('#how-step-1 .how-step-icon, #how-step-2 .how-step-icon, #how-step-3 .how-step-icon', { scale: 0 });
+      gsap.set('#how-step-1 .how-step-number, #how-step-2 .how-step-number, #how-step-3 .how-step-number', { opacity: 0 });
+
+      // Subtle parallax on header text as section scrolls through viewport
+      gsap.to('.how-header', {
+        y: -28,
+        ease: 'none',
+        scrollTrigger: {
+          trigger: '#how-section-anim',
+          start: 'top bottom',
+          end: 'bottom top',
+          scrub: 1,
+        }
+      });
+
+      ScrollTrigger.create({
+        trigger: '#how-section-anim',
+        start: 'top 80%',
+        once: true,
+        onEnter() {
+          const htl = gsap.timeline();
+
+          // Label slides up from clip
+          htl.to('#how-label-inner', { yPercent: 0, opacity: 1, duration: 0.48, ease: 'power3.out' })
+
+          // Headline lines clip up from bottom, staggered
+          .to('.how-line-inner', { yPercent: 0, duration: 0.62, ease: 'power3.out', stagger: 0.13 }, '-=0.18')
+
+          // Subtitle fades in
+          .to('#how-sub', { opacity: 1, y: 0, duration: 0.48, ease: 'power2.out' }, '-=0.3')
+
+          // Progress line draws left → right
+          .to('#how-progress-fill', { scaleX: 1, duration: 0.88, ease: 'power1.inOut' }, '-=0.08')
+
+          // Step 1 slides up
+          .to('#how-step-1', { opacity: 1, y: 0, duration: 0.52, ease: 'power3.out' }, '-=0.82')
+          .to('#how-step-1 .how-step-number', { opacity: 1, duration: 0.28 }, '<')
+          .to('#how-step-1 .how-step-icon', { scale: 1, duration: 0.42, ease: 'back.out(2.4)' }, '-=0.18')
+
+          // Arrow 1 springs in
+          .to('#how-arrow-1', { scale: 1, opacity: 1, duration: 0.36, ease: 'back.out(2.8)' }, '-=0.08')
+
+          // Step 2 slides up
+          .to('#how-step-2', { opacity: 1, y: 0, duration: 0.52, ease: 'power3.out' }, '-=0.2')
+          .to('#how-step-2 .how-step-number', { opacity: 1, duration: 0.28 }, '<')
+          .to('#how-step-2 .how-step-icon', { scale: 1, duration: 0.42, ease: 'back.out(2.4)' }, '-=0.18')
+
+          // Arrow 2 springs in
+          .to('#how-arrow-2', { scale: 1, opacity: 1, duration: 0.36, ease: 'back.out(2.8)' }, '-=0.08')
+
+          // Step 3 slides up
+          .to('#how-step-3', { opacity: 1, y: 0, duration: 0.52, ease: 'power3.out' }, '-=0.2')
+          .to('#how-step-3 .how-step-number', { opacity: 1, duration: 0.28 }, '<')
+          .to('#how-step-3 .how-step-icon', { scale: 1, duration: 0.42, ease: 'back.out(2.4)' }, '-=0.18')
+          // Clear GSAP inline transforms on icons so CSS hover :hover scale works
+          .call(() => {
+            document.querySelectorAll('.how-step .how-step-icon').forEach(el => gsap.set(el, { clearProps: 'transform' }));
+          });
+        }
+      });
+    })();
+  </script>
+
+</body>
+</html>
