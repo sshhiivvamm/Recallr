@@ -51,6 +51,7 @@
       --amber:       #FBBF24;
       --amber-dim:   rgba(251,191,36,0.12);
       --coral:       #F87171;
+      --coral-dim:   rgba(248,113,113,0.12);
       --text1:       #F8FAFC;
       --text2:       rgba(248,250,252,0.60);
       --text3:       rgba(248,250,252,0.32);
@@ -713,6 +714,82 @@
       transform: translate(-50%, -50%);
       pointer-events: none;
       z-index: -1;
+    }
+
+    /* ─── Share-sheet mini demo (Organize feature) ──────────────── */
+    .share-demo {
+      margin: 32px 0;
+      padding: 18px 20px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      max-width: 420px;
+    }
+
+    .share-demo-handle {
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border2);
+      margin: 0 auto 14px;
+    }
+
+    .share-demo-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: 14px;
+    }
+
+    .share-demo-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .share-app-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      opacity: 0.55;
+    }
+
+    .share-demo-arrow {
+      flex-shrink: 0;
+      color: var(--text3);
+      display: flex;
+      align-items: center;
+    }
+
+    .share-app-icon-recallr {
+      width: 44px;
+      height: 44px;
+      border-radius: 13px;
+      background: linear-gradient(135deg, var(--cyan) 0%, #60A5FA 100%);
+      box-shadow: 0 0 0 3px var(--cyan-glow), 0 8px 20px rgba(56,189,248,0.35);
+      color: #07090D;
+      font-weight: 800;
+      font-size: 17px;
+      opacity: 1;
+    }
+
+    .share-demo-toast {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 16px;
+      padding: 10px 14px;
+      background: var(--green-dim);
+      border-radius: var(--radius-sm);
+      font-size: 12.5px;
+      color: var(--text1);
+      font-weight: 600;
     }
 
     /* ─── REVIEW HERO ────────────────────────────────────────────── */
@@ -1617,6 +1694,90 @@
           <div class="feature-phone-glow" style="background:radial-gradient(circle,rgba(56,189,248,0.20) 0%,transparent 70%);"></div>
           <!-- SCREENSHOT NEEDED: screenshots/save-dark.png — paste URL / add link screen, 1080×2340px, Samsung hardware frame baked in -->
           <img class="feature-phone-raw" src="screenshots/save-dark.png" alt="Recallr — Save Link" loading="lazy">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FEATURE: ORGANIZE BY PLATFORM ─────────────────────────────── -->
+  <section class="feature-section" style="background:linear-gradient(180deg,transparent 0%,rgba(248,113,113,0.03) 50%,transparent 100%);">
+    <div class="orb" style="width:400px;height:400px;background:radial-gradient(circle,rgba(248,113,113,0.06) 0%,transparent 70%);top:50%;left:-100px;transform:translateY(-50%);"></div>
+    <div class="container">
+      <div class="feature-grid reverse">
+        <div class="feature-copy reveal">
+          <div class="section-label-row">
+            <div class="section-label-line" style="background:linear-gradient(90deg,var(--coral),transparent);"></div>
+            <span class="label" style="color:var(--coral);">Organize</span>
+          </div>
+          <h2 class="headline-lg feature-headline">
+            Every app has a "Saved" tab.<br>Nothing ever comes back out.
+          </h2>
+          <p class="body-lg feature-body">
+            YouTube's Watch Later. Instagram's saved posts. X bookmarks.
+            They're one-way doors — links go in and vanish under a thousand more.
+            Recallr sits on top of all of them: share from any app in one tap,
+            and it's filed under the platform it came from automatically.
+          </p>
+
+          <!-- Share-sheet mini demo -->
+          <div class="share-demo reveal reveal-delay-1">
+            <div class="share-demo-handle"></div>
+            <div class="share-demo-title">Share via</div>
+            <div class="share-demo-row">
+              <div class="share-app-icon" style="background:#FF0000;">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4.5l6 3.5-6 3.5v-7Z" fill="#fff"/></svg>
+              </div>
+              <div class="share-app-icon" style="background:linear-gradient(135deg,#F58529,#DD2A7B,#8134AF);">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="3.5" stroke="#fff" stroke-width="1.3"/><circle cx="8" cy="8" r="2.6" stroke="#fff" stroke-width="1.3"/><circle cx="11.3" cy="4.7" r="0.9" fill="#fff"/></svg>
+              </div>
+              <div class="share-app-icon" style="background:#000;">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 2l12 12M14 2L2 14" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </div>
+              <div class="share-app-icon" style="background:#FF4500;">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="9.2" r="4" stroke="#fff" stroke-width="1.2"/><circle cx="5.3" cy="9" r="0.9" fill="#fff"/><circle cx="10.7" cy="9" r="0.9" fill="#fff"/><path d="M5.8 11.2c.6.5 1.4.7 2.2.7s1.6-.2 2.2-.7" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/><circle cx="11.5" cy="4.8" r="1.3" stroke="#fff" stroke-width="1"/><path d="M8 5.2l.9-2.7 2.3.6" stroke="#fff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="share-demo-arrow">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h11M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="share-app-icon share-app-icon-recallr">R</div>
+            </div>
+            <div class="share-demo-toast">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7.3l3 3 6-6.6" stroke="#34D399" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Saved to Recallr — filed under Instagram
+            </div>
+          </div>
+
+          <ul class="feature-bullets">
+            <li>
+              <div class="bullet-icon" style="background:var(--coral-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#F87171" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              One tap from the native share sheet — no copy-paste, no switching apps
+            </li>
+            <li>
+              <div class="bullet-icon" style="background:var(--coral-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#F87171" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Auto-filed by source: YouTube, Instagram, X, Reddit, GitHub, Medium, LinkedIn, Facebook
+            </li>
+            <li>
+              <div class="bullet-icon" style="background:var(--coral-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#F87171" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Pin your busiest platforms to the top of your Library
+            </li>
+            <li>
+              <div class="bullet-icon" style="background:var(--coral-dim);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#F87171" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              Nothing stays buried — every save is searchable and reviewable later
+            </li>
+          </ul>
+        </div>
+
+        <div class="feature-phone-wrap reveal reveal-delay-1">
+          <div class="feature-phone-glow" style="background:radial-gradient(circle,rgba(248,113,113,0.20) 0%,transparent 70%);"></div>
+          <img class="feature-phone-raw" src="screenshots/library-dark.png" alt="Recallr Library — organized by platform" loading="lazy">
         </div>
       </div>
     </div>
