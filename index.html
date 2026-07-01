@@ -66,7 +66,6 @@
       font-family: 'Space Grotesk', -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text1);
-      overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
     }
 
@@ -898,6 +897,10 @@
     /* ─── FEATURES GRID ─────────────────────────────────────────── */
     .features-grid-section {
       height: 440vh;
+      /* overrides the global `section { overflow: hidden }` rule above —
+         with that ancestor clipping in place, .features-grid-sticky's
+         position:sticky never engages and the pin/hold effect never fires. */
+      overflow: visible;
     }
 
     .features-grid-sticky {
@@ -1258,8 +1261,8 @@
 
     /* ── Phone (≤ 600px) ────────────────────────────────── */
     @media (max-width: 600px) {
-      /* Base spacing */
-      .container { padding: 0 16px; }
+      /* Base spacing — larger side padding keeps text clear of the section clip */
+      .container { padding: 0 24px; }
 
       /* Nav */
       .nav-inner { padding: 0 16px; }
@@ -1267,8 +1270,9 @@
 
       /* Hero */
       .hero { padding: 88px 0 52px; }
-      .hero-inner { padding: 0 16px; gap: 40px; }
-      .hero-sub { font-size: 16px; }
+      .hero-inner { padding: 0 24px; gap: 40px; }
+      .hero-sub { font-size: 15px; max-width: 100%; word-break: break-word; }
+      .hero-trust { flex-wrap: wrap; }
       .hero-ctas { flex-direction: column; gap: 10px; }
       .btn-primary, .btn-secondary { justify-content: center; width: 100%; }
       .trust-chip { font-size: 11px; padding: 5px 10px; }
@@ -1279,9 +1283,20 @@
       .metrics-inner { gap: 24px; flex-direction: column; }
       .metric-value  { font-size: 32px; }
 
+      /* Prevent grid/flex children from exceeding track width */
+      .hero-inner, .hero-left, .hero-right,
+      .feature-grid, .feature-copy { min-width: 0; }
+
+      /* Hard-cap all text containers to viewport minus gutters */
+      .feature-copy, .hero-left, .how-header,
+      .review-hero-inner { max-width: calc(100vw - 32px); }
+
       /* Feature sections */
       .feature-section { padding: 56px 0; }
       .feature-grid { gap: 36px; }
+      .feature-grid > * { min-width: 0; }
+      .feature-body, .feature-bullets { text-align: left; overflow-wrap: break-word; }
+      .feature-copy { overflow: hidden; }
       .feature-phone-raw { width: 200px; }
       .feature-phone     { width: 200px; }
       .headline-lg { font-size: clamp(20px, 5.5vw, 26px); }
@@ -1300,7 +1315,9 @@
 
       /* How it works */
       .how-section  { padding: 56px 0; }
+      .how-header   { padding: 0 24px; }
       .how-step     { padding: 28px 20px; }
+      .how-steps > * { min-width: 0; }
 
       /* Features grid — static layout on mobile, no scroll-pin */
       .features-grid-section { height: auto; padding: 56px 0; }
@@ -1328,6 +1345,8 @@
       /* Philosophy */
       .philosophy-section  { padding: 80px 0; }
       .philosophy-quote    { font-size: clamp(18px, 5.2vw, 24px); letter-spacing: -1px; }
+      .philosophy-sub      { font-size: 15px; }
+      .philosophy-attrs    { width: 100%; gap: 16px !important; }
 
       /* Download CTA */
       .download-card h2    { font-size: clamp(22px, 5.8vw, 30px); }
@@ -1970,7 +1989,7 @@
         Recallr is built on the opposite belief: that the links you save are worth
         revisiting — and that a machine can help you do it at exactly the right time.
       </p>
-      <div class="reveal reveal-delay-2" style="margin-top:48px;display:flex;align-items:center;justify-content:center;gap:32px;flex-wrap:wrap;">
+      <div class="philosophy-attrs reveal reveal-delay-2" style="margin-top:48px;display:flex;align-items:center;justify-content:center;gap:32px;flex-wrap:wrap;">
         <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text3);">
           <div style="width:28px;height:1px;background:var(--border2);"></div>
           No cloud
@@ -2277,6 +2296,7 @@
       });
     })();
   </script>
+
 
 </body>
 </html>
