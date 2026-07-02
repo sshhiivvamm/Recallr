@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:metadata_fetch/metadata_fetch.dart';
 import 'package:recallr/theme/recallr_colors.dart';
 
@@ -65,6 +66,7 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
   bool _fetchingMeta = false;
   bool _saving = false;
   bool _saveSuccess = false;
+  bool _notesAutoFilled = false; // true when notes were populated from metadata
   Metadata? _meta;
   String? _domain;
   TagModel? _selectedTag;
@@ -109,6 +111,40 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
 
   // ── Metadata fetch ─────────────────────────────────────────────────────────
 
+  // Parses <meta name="keywords"> from raw HTML — handles both attribute orderings.
+  static String? _parseKeywords(String html) {
+    final patterns = [
+      RegExp(
+        r'''<meta[^>]+name=["']keywords["'][^>]+content=["']([^"']+)["']''',
+        caseSensitive: false,
+      ),
+      RegExp(
+        r'''<meta[^>]+content=["']([^"']+)["'][^>]+name=["']keywords["']''',
+        caseSensitive: false,
+      ),
+    ];
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(html);
+      if (match != null) {
+        final kw = match.group(1)?.trim();
+        if (kw != null && kw.isNotEmpty) return kw;
+      }
+    }
+    return null;
+  }
+
+  Future<String?> _fetchKeywords(String url) async {
+    try {
+      final response = await http
+          .get(Uri.parse(url), headers: {'User-Agent': 'Mozilla/5.0'})
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        return _parseKeywords(response.body);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<void> _fetchMeta(String raw) async {
     final url = raw.trim();
     final isValid = url.startsWith('http://') || url.startsWith('https://');
@@ -120,7 +156,14 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
     });
 
     try {
-      final data = await MetadataFetch.extract(url);
+      // Run metadata fetch and keywords fetch in parallel — no added latency.
+      final results = await Future.wait([
+        MetadataFetch.extract(url),
+        _fetchKeywords(url),
+      ]);
+      final data = results[0] as Metadata?;
+      final keywords = results[1] as String?;
+
       final uri = Uri.tryParse(url);
       if (!mounted) return;
       setState(() {
@@ -128,6 +171,19 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
         _domain = uri?.host ?? '';
         if (_titleCtrl.text.isEmpty && data?.title != null) {
           _titleCtrl.text = data!.title!;
+        }
+        // Auto-populate notes with meta keywords so they become searchable.
+        // Falls back to og:description if no keywords tag found.
+        // Only fills if the user hasn't typed anything yet.
+        if (_notesCtrl.text.isEmpty) {
+          if (keywords != null) {
+            _notesCtrl.text = keywords;
+            _notesAutoFilled = true;
+          } else if (data?.description != null &&
+              data!.description!.trim().isNotEmpty) {
+            _notesCtrl.text = data.description!.trim();
+            _notesAutoFilled = true;
+          }
         }
         _fetchingMeta = false;
       });
@@ -326,23 +382,25 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'SAVE LINK',
-                      style: theme.titleMedium!.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.5,
-                        color: c.textPrimary,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'SAVE LINK',
+                        style: theme.titleMedium!.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.5,
+                          color: c.textPrimary,
+                        ),
                       ),
-                    ),
-                    Text(
-                      'Add to your knowledge vault',
-                      style: theme.bodySmall!
-                          .copyWith(color: c.textHint, fontSize: 11),
-                    ),
-                  ],
+                      Text(
+                        'Add to your knowledge vault',
+                        style: theme.bodySmall!
+                            .copyWith(color: c.textHint, fontSize: 11),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -483,7 +541,30 @@ class _SaveLinkSheetState extends ConsumerState<_SaveLinkSheet> {
               maxLines: 3,
               c: c,
               theme: theme,
+              onChanged: (_) {
+                if (_notesAutoFilled) setState(() => _notesAutoFilled = false);
+              },
             ),
+            if (_notesAutoFilled) ...[
+              const SizedBox(height: 5),
+              Row(
+                children: [
+                  Icon(Icons.auto_awesome_rounded,
+                      size: 10, color: c.accent.withValues(alpha: 0.7)),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      'Auto-filled from page metadata · edit freely',
+                      style: theme.labelSmall!.copyWith(
+                        color: c.textHint,
+                        fontSize: 10,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
 
             const SizedBox(height: 24),
 
@@ -951,6 +1032,7 @@ class _StyledField extends StatefulWidget {
   final int maxLines;
   final AppColorScheme c;
   final TextTheme theme;
+  final ValueChanged<String>? onChanged;
 
   const _StyledField({
     required this.controller,
@@ -959,6 +1041,7 @@ class _StyledField extends StatefulWidget {
     this.maxLines = 1,
     required this.c,
     required this.theme,
+    this.onChanged,
   });
 
   @override
@@ -1021,6 +1104,7 @@ class _StyledFieldState extends State<_StyledField> {
               controller: widget.controller,
               focusNode: _focus,
               maxLines: widget.maxLines,
+              onChanged: widget.onChanged,
               style: theme.bodyMedium!.copyWith(color: c.textPrimary),
               decoration: InputDecoration(
                 hintText: widget.hint,

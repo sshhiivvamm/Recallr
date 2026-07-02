@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -162,16 +164,40 @@ class LinkRepository {
   }
 
   Future<LinkModel?> getDiscoverLink() async {
-    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    final now = DateTime.now();
+    final cutoff = now.subtract(const Duration(days: 7));
     final all = await isar.linkModels.where().findAll();
     final candidates = all
         .where((l) => !l.isRead && l.createdAt.isBefore(cutoff))
         .toList();
     if (candidates.isEmpty) return null;
-    candidates.shuffle();
-    final link = candidates.first;
-    await link.tags.load();
-    return link;
+
+    // Weighted random: older + never-opened links surface more often.
+    // Weight = ageDays × (2 if never opened, 1 otherwise).
+    final weights = candidates.map((l) {
+      final ageDays = now.difference(l.createdAt).inDays.toDouble();
+      return ageDays * (l.lastOpenedAt == null ? 2.0 : 1.0);
+    }).toList();
+
+    final totalWeight = weights.fold(0.0, (a, b) => a + b);
+    LinkModel selected;
+    if (totalWeight <= 0) {
+      // All candidates are from today (unlikely but guard anyway)
+      selected = candidates[math.Random().nextInt(candidates.length)];
+    } else {
+      final rand = math.Random().nextDouble() * totalWeight;
+      double cumulative = 0;
+      selected = candidates.last;
+      for (int i = 0; i < candidates.length; i++) {
+        cumulative += weights[i];
+        if (rand <= cumulative) {
+          selected = candidates[i];
+          break;
+        }
+      }
+    }
+    await selected.tags.load();
+    return selected;
   }
 
   Future<int> getReadingStreak() async {

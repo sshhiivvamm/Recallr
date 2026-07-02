@@ -15,7 +15,13 @@ class NotificationService {
 
   final _plugin = FlutterLocalNotificationsPlugin();
 
-  Future<void> init() async {
+  // Cached init future — callers await this to ensure the plugin is ready
+  // before invoking any method that uses _plugin (e.g. requestPermissions).
+  Future<void>? _initFuture;
+
+  Future<void> init() => _initFuture ??= _doInit();
+
+  Future<void> _doInit() async {
     tz.initializeTimeZones();
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -58,6 +64,7 @@ class NotificationService {
   }
 
   Future<bool> requestPermissions() async {
+    await init(); // ensure plugin is initialised before resolving implementations
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     final ios = _plugin.resolvePlatformSpecificImplementation<
@@ -75,7 +82,7 @@ class NotificationService {
     return granted;
   }
 
-  // One (title, body) pair per weekday — Monday=0 … Sunday=6
+  // Fallback copy (one per weekday) used when due count is 0 or unknown.
   static const _messages = [
     ('Start the week sharp 🧠', 'A quick review keeps your Monday ideas fresh.'),
     ('Tuesday check-in 📌', 'Two minutes on your saves beats forgetting them.'),
@@ -86,7 +93,11 @@ class NotificationService {
     ('Sunday reset 🌿', 'Reflect on what you saved this week before the new one begins.'),
   ];
 
-  Future<void> scheduleDailyReminder() async {
+  // Call this after a review session or at app startup to include a specific count.
+  Future<void> rescheduleWithCount(int dueCount) => scheduleDailyReminder(dueCount: dueCount);
+
+  Future<void> scheduleDailyReminder({int dueCount = 0}) async {
+    await init();
     await _plugin.cancel(_notifId);
 
     final (hour, minute) = await getReminderTime();
@@ -98,8 +109,17 @@ class NotificationService {
     }
     final scheduledDate = tz.TZDateTime.from(localTarget.toUtc(), tz.UTC);
 
-    // Pick message for the day the notification will actually fire
-    final (title, body) = _messages[(localTarget.weekday - 1) % 7];
+    // Use count-specific copy when we know how many links are due.
+    final String title;
+    final String body;
+    if (dueCount > 0) {
+      final linkWord = dueCount == 1 ? 'link' : 'links';
+      title = '$dueCount $linkWord waiting for review 🧠';
+      body = 'Open Recallr and keep your streak going.';
+    } else {
+      // Fall back to weekday copy when count is unknown
+      (title, body) = _messages[(localTarget.weekday - 1) % 7];
+    }
 
     const androidDetails = AndroidNotificationDetails(
       'recallr_reminders',

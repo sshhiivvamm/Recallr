@@ -38,7 +38,7 @@ class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex(BuildContext context) {
     final loc = GoRouterState.of(context).uri.toString();
     if (loc.startsWith('/search')) return 1;
-    if (loc.startsWith('/categories')) return 2;
+    if (loc.startsWith('/categories') || loc.startsWith('/collections')) return 2;
     if (loc.startsWith('/profile')) return 3;
     return 0;
   }
@@ -56,6 +56,7 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     final index = _currentIndex(context);
     return Scaffold(
+      backgroundColor: context.colors.background,
       body: widget.child,
       bottomNavigationBar: _CustomNavBar(
         currentIndex: index,
@@ -334,16 +335,49 @@ class _NavBgPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final topEdge = _topEdgePath(size);
 
-    // ── Filled background ────────────────────────────
+    // Fill path: arch curve → bottom-right → bottom-left → close.
+    // Only fills below the arch line; the notch area above it stays transparent,
+    // showing the Scaffold's backgroundColor (= context.colors.background set on
+    // MainNavigation's Scaffold) which switches at the same theme midpoint as
+    // bgColor — no flash.
     final fill = Path.from(topEdge)
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
 
+    // ── Shadow cast upward from the arch ─────────────
+    // BlurStyle.outer: blur only OUTSIDE the fill path, nothing inside.
+    // The shadow is therefore visible only in the transparent notch area above
+    // the arch, giving the nav bar a floating/elevated look in both modes.
+    final isDark = bgColor.computeLuminance() < 0.15;
+    canvas.drawPath(
+      fill,
+      Paint()
+        ..color = Colors.black.withValues(alpha: isDark ? 0.45 : 0.08)
+        ..maskFilter = MaskFilter.blur(BlurStyle.outer, isDark ? 8.0 : 14.0),
+    );
+
+    // ── Filled background ────────────────────────────
     canvas.drawPath(fill, Paint()..color = bgColor);
 
-    // ── Accent glow stroke along arch ────────────────
+    // Fill the flat top areas LEFT and RIGHT of the arch span.
+    // The fill path only covers below the arch curve; the flat corners
+    // (0..archLeft and archRight..width, height 0.._archH) remain transparent
+    // and show the scaffold background — causing the visible strip.
     final cx = archFraction * size.width;
+    final archLeft  = max(0.0, cx - _halfSpan);
+    final archRight = min(size.width, cx + _halfSpan);
+    final flatPaint = Paint()..color = bgColor;
+    if (archLeft > 0) {
+      canvas.drawRect(Rect.fromLTWH(0, 0, archLeft, _archH), flatPaint);
+    }
+    if (archRight < size.width) {
+      canvas.drawRect(
+          Rect.fromLTWH(archRight, 0, size.width - archRight, _archH),
+          flatPaint);
+    }
+
+    // ── Accent glow stroke along arch ────────────────
     final glowPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5

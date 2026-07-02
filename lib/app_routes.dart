@@ -9,6 +9,7 @@ import 'core/features/view/re_category.dart';
 import 'core/features/view/re_collection_links.dart';
 import 'core/features/view/re_collections.dart';
 import 'core/features/view/re_filtered_links.dart';
+import 'core/features/view/re_notifications.dart';
 import 'core/features/view/re_onboarding.dart';
 import 'core/features/view/re_profile.dart';
 import 'core/features/view/re_reader.dart';
@@ -66,6 +67,12 @@ class ReNav {
         path: '/review',
         name: 'review',
         builder: (context, state) => const ReReview(),
+      ),
+      // Notifications — full-screen, no nav bar
+      GoRoute(
+        path: '/notifications',
+        name: 'notifications',
+        builder: (context, state) => const ReNotifications(),
       ),
       ShellRoute(
         builder: (context, state, child) {

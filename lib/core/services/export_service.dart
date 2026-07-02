@@ -4,7 +4,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
+import '../../data/models/Highlight/highlight_model.dart';
 import '../../data/models/Link/link_model.dart';
+import '../../data/models/collection_model.dart';
 
 class ExportService {
   ExportService._();
@@ -12,15 +14,27 @@ class ExportService {
 
   Future<void> exportAsJson(Isar isar) async {
     final links = await isar.linkModels.where().findAll();
-
     for (final link in links) {
       await link.tags.load();
     }
 
+    // Build highlights map keyed by linkId for O(1) lookup
+    final allHighlights = await isar.highlightModels.where().findAll();
+    final highlightsByLink = <int, List<HighlightModel>>{};
+    for (final h in allHighlights) {
+      highlightsByLink.putIfAbsent(h.linkId, () => []).add(h);
+    }
+
+    final collections = await isar.folderModels.where().findAll();
+
     final data = {
-      'version': '1.0',
-      'total': links.length,
-      'links': links.map((l) => _linkToMap(l)).toList(),
+      'version': '2.0',
+      'exported_at': DateTime.now().toIso8601String(),
+      'total_links': links.length,
+      'collections': collections.map((c) => _collectionToMap(c)).toList(),
+      'links': links
+          .map((l) => _linkToMap(l, highlightsByLink[l.id] ?? []))
+          .toList(),
     };
 
     final jsonStr = const JsonEncoder.withIndent('  ').convert(data);
@@ -55,7 +69,16 @@ class ExportService {
 
   String _csv(String value) => '"${value.replaceAll('"', '""')}"';
 
-  Map<String, dynamic> _linkToMap(LinkModel l) => {
+  Map<String, dynamic> _collectionToMap(FolderModel c) => {
+        'id': c.id,
+        'name': c.name,
+        'icon': c.icon,
+        'colorHex': c.colorHex,
+        'sortOrder': c.sortOrder,
+        'createdAt': c.createdAt.toIso8601String(),
+      };
+
+  Map<String, dynamic> _linkToMap(LinkModel l, List<HighlightModel> highlights) => {
         'title': l.title,
         'url': l.url,
         'description': l.description,
@@ -71,6 +94,14 @@ class ExportService {
         'smEaseFactor': l.smEaseFactor,
         'smInterval': l.smInterval,
         'smNextReview': l.smNextReview?.toIso8601String(),
+        'highlights': highlights
+            .map((h) => {
+                  'text': h.text,
+                  'colorHex': h.colorHex,
+                  'note': h.note,
+                  'createdAt': h.createdAt.toIso8601String(),
+                })
+            .toList(),
       };
 
   Future<void> _shareText(String content, String filename, String mimeType) async {

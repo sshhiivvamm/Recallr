@@ -21,15 +21,18 @@ Future<void> showLinkOptions(
     backgroundColor: Colors.transparent,
     useRootNavigator: true,
     isScrollControlled: true,
-    builder: (_) => _LinkOptionsSheet(link: link, ref: ref),
+    builder: (_) => LinkOptionsSheet(link: link, ref: ref),
   );
 }
 
-class _LinkOptionsSheet extends ConsumerWidget {
+/// Public (unlike edit_link_sheet's private sibling) so golden tests can
+/// render it directly instead of driving `showLinkOptions`'s modal —
+/// see `test/golden/link_options_sheet_golden_test.dart`.
+class LinkOptionsSheet extends ConsumerWidget {
   final LinkModel link;
   final WidgetRef ref;
 
-  const _LinkOptionsSheet({required this.link, required this.ref});
+  const LinkOptionsSheet({super.key, required this.link, required this.ref});
 
   @override
   Widget build(BuildContext context, WidgetRef innerRef) {

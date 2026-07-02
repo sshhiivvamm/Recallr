@@ -1,65 +1,22 @@
 import 'dart:math' show max;
 
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../common/add_category_sheet.dart';
+import 're_privacy_policy.dart';
 import '../../../core/database/providers/isar_provider.dart';
+import '../../../core/services/backup_service.dart';
 import '../../../core/services/export_service.dart';
 import '../../../core/services/link_health_service.dart';
-import '../../../core/services/notification_service.dart';
 import '../../../theme/controller/theme_controller.dart';
 import '../../../theme/recallr_colors.dart';
 import '../../features/category/tag_list_provider.dart';
 import '../../features/collections/collection_provider.dart';
+import '../../features/notifications/notification_providers.dart';
 import '../../repositrories/link_providers/recent_links_provider.dart';
-
-final _notifEnabledProvider =
-    StateNotifierProvider<_NotifNotifier, bool>(
-  (ref) => _NotifNotifier(),
-);
-
-class _ReminderTimeNotifier extends StateNotifier<TimeOfDay> {
-  _ReminderTimeNotifier() : super(const TimeOfDay(hour: 10, minute: 0)) {
-    _load();
-  }
-
-  Future<void> _load() async {
-    final (h, m) = await NotificationService.instance.getReminderTime();
-    state = TimeOfDay(hour: h, minute: m);
-  }
-
-  Future<void> update(int hour, int minute) async {
-    await NotificationService.instance.setReminderTime(hour, minute);
-    state = TimeOfDay(hour: hour, minute: minute);
-  }
-}
-
-final _reminderTimeProvider =
-    StateNotifierProvider<_ReminderTimeNotifier, TimeOfDay>(
-  (ref) => _ReminderTimeNotifier(),
-);
-
-class _NotifNotifier extends StateNotifier<bool> {
-  _NotifNotifier() : super(false) {
-    _load();
-  }
-
-  Future<void> _load() async {
-    state = await NotificationService.instance.isEnabled();
-  }
-
-  Future<void> toggle(bool val) async {
-    if (val) {
-      final granted =
-          await NotificationService.instance.requestPermissions();
-      if (!granted) return;
-    }
-    await NotificationService.instance.setEnabled(val);
-    state = val;
-  }
-}
 
 class ReProfile extends ConsumerWidget {
   const ReProfile({super.key});
@@ -75,9 +32,9 @@ class ReProfile extends ConsumerWidget {
     final tags = ref.watch(tagListProvider);
     final streakAsync = ref.watch(readingStreakProvider);
     final collectionsCount = ref.watch(collectionsCountProvider);
-    final notifEnabled = ref.watch(_notifEnabledProvider);
+    final notifEnabled = ref.watch(notifEnabledProvider);
     final dailyCounts = ref.watch(thisWeekDailyCountsProvider);
-    final reminderTod = ref.watch(_reminderTimeProvider);
+    final reminderTod = ref.watch(reminderTimeProvider);
 
     final savedVal =
         totalLinks.maybeWhen(data: (n) => '$n', orElse: () => '—');
@@ -371,6 +328,58 @@ class ReProfile extends ConsumerWidget {
             },
           ),
 
+          const SizedBox(height: 8),
+
+          _SettingsTile(
+            icon: Icons.restore_rounded,
+            iconColor: c.purple,
+            label: 'Restore from Backup',
+            subtitle: 'Replace current data with auto-backup file',
+            c: c,
+            theme: theme,
+            onTap: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Restore Backup?'),
+                  content: const Text(
+                    'This will replace all your current links, '
+                    'collections, and highlights with the last '
+                    'auto-backup. This cannot be undone.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: Text('Restore',
+                          style: TextStyle(color: c.coral)),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm != true || !context.mounted) return;
+              final messenger = ScaffoldMessenger.of(context);
+              final isar = await ref.read(isarProvider.future);
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Restoring…')),
+              );
+              final ok =
+                  await BackupService.instance.restoreToIsar(isar);
+              if (!context.mounted) return;
+              messenger.clearSnackBars();
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(ok
+                      ? 'Restore complete'
+                      : 'No backup file found'),
+                ),
+              );
+            },
+          ),
+
           const SizedBox(height: 24),
 
           // ── Section: Preferences ───────────────────────
@@ -405,68 +414,16 @@ class ReProfile extends ConsumerWidget {
           _SettingsTile(
             icon: Icons.notifications_outlined,
             iconColor: c.purple,
-            label: 'Daily Reminders',
+            label: 'Notifications',
             subtitle: notifEnabled
-                ? 'Fires daily at ${reminderTod.format(context)}'
-                : 'Turn on to get daily reminders',
+                ? 'Daily reminders at ${reminderTod.format(context)}'
+                : 'Reminders off',
             c: c,
             theme: theme,
-            trailing: Switch.adaptive(
-              value: notifEnabled,
-              onChanged: (val) =>
-                  ref.read(_notifEnabledProvider.notifier).toggle(val),
-              activeThumbColor: c.accent,
-              activeTrackColor: c.accentDim,
-            ),
-            onTap: () => ref
-                .read(_notifEnabledProvider.notifier)
-                .toggle(!notifEnabled),
+            trailing: Icon(Icons.chevron_right_rounded,
+                size: 18, color: c.textHint),
+            onTap: () => context.push('/notifications'),
           ),
-
-          if (notifEnabled) ...[
-            const SizedBox(height: 8),
-            _SettingsTile(
-              icon: Icons.schedule_rounded,
-              iconColor: c.accent,
-              label: 'Reminder Time',
-              subtitle: reminderTod.format(context),
-              c: c,
-              theme: theme,
-              trailing: Icon(Icons.chevron_right_rounded,
-                  size: 18, color: c.textHint),
-              onTap: () async {
-                final picked = await showTimePicker(
-                  context: context,
-                  initialTime: reminderTod,
-                );
-                if (picked == null) return;
-                await ref
-                    .read(_reminderTimeProvider.notifier)
-                    .update(picked.hour, picked.minute);
-              },
-            ),
-            const SizedBox(height: 8),
-            _SettingsTile(
-              icon: Icons.send_rounded,
-              iconColor: c.green,
-              label: 'Send Test Notification',
-              subtitle: 'Fires in 5 seconds',
-              c: c,
-              theme: theme,
-              trailing: Icon(Icons.chevron_right_rounded,
-                  size: 18, color: c.textHint),
-              onTap: () async {
-                await NotificationService.instance.sendTestNotification();
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Test notification fires in 5 seconds'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
-            ),
-          ],
 
           const SizedBox(height: 24),
 
@@ -481,6 +438,22 @@ class ReProfile extends ConsumerWidget {
             subtitle: 'Version 1.0.0',
             c: c,
             theme: theme,
+          ),
+          const SizedBox(height: 8),
+          _SettingsTile(
+            icon: Icons.shield_outlined,
+            iconColor: c.accent,
+            label: 'Privacy Policy',
+            subtitle: 'How we handle your data',
+            c: c,
+            theme: theme,
+            trailing: Icon(Icons.chevron_right_rounded,
+                size: 18, color: c.textHint),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const PrivacyPolicyScreen(),
+              ),
+            ),
           ),
 
           const SizedBox(height: 32),

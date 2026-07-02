@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/repositrories/highlight/highlight_provider.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/services/sm2_service.dart';
 import '../../../data/models/Highlight/highlight_model.dart';
 import '../../../data/models/Link/link_model.dart';
@@ -49,6 +50,14 @@ class _ReReviewState extends ConsumerState<ReReview> {
     });
     ref.invalidate(reviewQueueProvider);
     ref.invalidate(reviewDueCountProvider);
+
+    // When the session ends, reschedule the daily notification with the
+    // updated remaining-due count so tomorrow's message is specific.
+    final remaining = _queue!.length - _current;
+    if (remaining <= 0 && await NotificationService.instance.isEnabled()) {
+      final stillDue = await ref.read(reviewDueCountProvider.future);
+      await NotificationService.instance.rescheduleWithCount(stillDue);
+    }
   }
 
   @override
@@ -228,16 +237,25 @@ class _ReReviewState extends ConsumerState<ReReview> {
                           dimColor: c.coral.withValues(alpha: 0.10),
                           onTap: () => _rate(1),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
+                        _RatingButton(
+                          icon: Icons.trending_down_rounded,
+                          label: 'Hard',
+                          sublabel: 'Soon',
+                          color: c.amber,
+                          dimColor: c.amberDim,
+                          onTap: () => _rate(3),
+                        ),
+                        const SizedBox(width: 8),
                         _RatingButton(
                           icon: Icons.check_rounded,
-                          label: 'OK',
+                          label: 'Good',
                           sublabel: 'Few days',
                           color: c.accent,
                           dimColor: c.accentDim,
                           onTap: () => _rate(4),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                         _RatingButton(
                           icon: Icons.bolt_rounded,
                           label: 'Easy',

@@ -5,10 +5,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../../common/add_category_sheet.dart';
 import '../../../common/sheet_fab.dart';
+import '../../../data/models/collection_model.dart';
 import '../../../data/models/Tag/tag_model.dart';
 import '../../../theme/recallr_colors.dart';
 import '../../database/providers/isar_provider.dart';
 import '../category/tag_list_provider.dart';
+import '../collections/collection_provider.dart';
 
 // ── Platform data ─────────────────────────────────────────────────────────────
 
@@ -151,6 +153,97 @@ class _CategoryBodyState extends ConsumerState<_CategoryBody> {
     ref.invalidate(tagListProvider);
   }
 
+  void _showTagOptions(BuildContext context, TagModel tag) {
+    final c = context.colors;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: c.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: c.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Icon(Icons.edit_rounded, color: c.accent),
+              title: const Text('Rename'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _promptRenameTag(context, tag);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                tag.isDefault
+                    ? Icons.push_pin_outlined
+                    : Icons.push_pin_rounded,
+                color: c.textSecondary,
+              ),
+              title: Text(tag.isDefault ? 'Unpin' : 'Pin to top'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _togglePin(tag);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline_rounded, color: c.coral),
+              title: Text('Delete', style: TextStyle(color: c.coral)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmDelete(context, tag);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _promptRenameTag(BuildContext context, TagModel tag) async {
+    final ctrl = TextEditingController(text: tag.name);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Category'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Category name'),
+          textCapitalization: TextCapitalization.words,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (newName == null || newName.isEmpty || newName == tag.name) return;
+    final isar = await ref.read(isarProvider.future);
+    await isar.writeTxn(() async {
+      tag.name = newName;
+      await isar.tagModels.put(tag);
+    });
+    ref.invalidate(tagListProvider);
+  }
+
   Future<void> _confirmDelete(BuildContext context, TagModel tag) async {
     final c = context.colors;
     final confirm = await showDialog<bool>(
@@ -275,6 +368,7 @@ class _CategoryBodyState extends ConsumerState<_CategoryBody> {
     final theme = Theme.of(context).textTheme;
     final pinned = _pinnedTags;
     final allSorted = _sortedTags;
+    final collectionsAsync = ref.watch(collectionsStreamProvider);
 
     final gridItems = <Widget>[
       ...pinned.map((tag) => _PinnedCard(
@@ -282,6 +376,7 @@ class _CategoryBodyState extends ConsumerState<_CategoryBody> {
             onTap: () => _openTag(tag),
             onDelete: () => _confirmDelete(context, tag),
             onUnpin: () => _togglePin(tag),
+            onRename: () => _promptRenameTag(context, tag),
           )),
       _NewCategoryCard(onTap: _showAddSheet),
     ];
@@ -340,6 +435,92 @@ class _CategoryBodyState extends ConsumerState<_CategoryBody> {
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
               childAspectRatio: 0.82,
+            ),
+          ),
+        ),
+
+        // ── COLLECTIONS label ─────────────────────────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 28, 16, 12),
+            child: Row(
+              children: [
+                Text(
+                  'COLLECTIONS',
+                  style: theme.labelSmall!.copyWith(
+                    color: c.textHint,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.8,
+                  ),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => context.push('/collections'),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'See all',
+                        style: theme.labelSmall!.copyWith(
+                          color: c.accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(Icons.arrow_forward_rounded,
+                          size: 12, color: c.accent),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ── Collections strip ─────────────────────────────
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: 118,
+            child: collectionsAsync.when(
+              data: (folders) => folders.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _NewCollectionMiniCard(
+                        c: c,
+                        theme: theme,
+                        label: 'Create your first collection',
+                        onTap: () => context.push('/collections'),
+                      ),
+                    )
+                  : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: folders.length + 1,
+                      separatorBuilder: (_, __) => const SizedBox(width: 10),
+                      itemBuilder: (ctx, i) {
+                        if (i == folders.length) {
+                          return _NewCollectionMiniCard(
+                            c: c,
+                            theme: theme,
+                            label: 'New Collection',
+                            onTap: () => context.push('/collections'),
+                          );
+                        }
+                        final folder = folders[i];
+                        return _CollectionMiniCard(
+                          folder: folder,
+                          c: c,
+                          theme: theme,
+                          onTap: () => context.push(
+                            '/collections/${folder.id}',
+                            extra: folder,
+                          ),
+                        );
+                      },
+                    ),
+              loading: () =>
+                  const Center(child: CircularProgressIndicator()),
+              error: (_, __) => const SizedBox.shrink(),
             ),
           ),
         ),
@@ -441,7 +622,8 @@ class _CategoryBodyState extends ConsumerState<_CategoryBody> {
                     .map((tag) => _TagChip(
                           tag: tag,
                           onTap: () => _openTag(tag),
-                          onLongPress: () => _togglePin(tag),
+                          onLongPress: () =>
+                              _showTagOptions(context, tag),
                         ))
                     .toList(),
               ),
@@ -550,12 +732,14 @@ class _PinnedCard extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onDelete;
   final VoidCallback onUnpin;
+  final VoidCallback onRename;
 
   const _PinnedCard({
     required this.tag,
     required this.onTap,
     required this.onDelete,
     required this.onUnpin,
+    required this.onRename,
   });
 
   @override
@@ -564,6 +748,56 @@ class _PinnedCard extends StatefulWidget {
 
 class _PinnedCardState extends State<_PinnedCard> {
   bool _pressed = false;
+
+  void _showOptions(BuildContext context) {
+    final c = context.colors;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: c.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: c.border, borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Icon(Icons.edit_rounded, color: c.accent),
+              title: const Text('Rename'),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onRename();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.push_pin_outlined, color: c.textSecondary),
+              title: const Text('Unpin'),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onUnpin();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline_rounded, color: c.coral),
+              title: Text('Delete', style: TextStyle(color: c.coral)),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onDelete();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
 
   static const _fallbackColors = [
     AppColors.cyan,
@@ -635,7 +869,7 @@ class _PinnedCardState extends State<_PinnedCard> {
 
     return GestureDetector(
       onTap: widget.onTap,
-      onLongPress: widget.onUnpin,
+      onLongPress: () => _showOptions(context),
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) => setState(() => _pressed = false),
       onTapCancel: () => setState(() => _pressed = false),
@@ -860,6 +1094,154 @@ class _TagChip extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Collection Mini Card (horizontal strip) ──────────────────────────────────
+
+class _CollectionMiniCard extends StatelessWidget {
+  final FolderModel folder;
+  final AppColorScheme c;
+  final TextTheme theme;
+  final VoidCallback onTap;
+
+  const _CollectionMiniCard({
+    required this.folder,
+    required this.c,
+    required this.theme,
+    required this.onTap,
+  });
+
+  static const _fallbacks = [
+    AppColors.cyan,
+    AppColors.purple,
+    AppColors.green,
+    AppColors.amber,
+    AppColors.coral,
+  ];
+
+  static Color _resolveColor(FolderModel folder) {
+    if (folder.colorHex != null && folder.colorHex!.isNotEmpty) {
+      try {
+        final hex = folder.colorHex!.replaceFirst('#', '');
+        return Color(int.parse('FF$hex', radix: 16));
+      } catch (_) {}
+    }
+    return _fallbacks[folder.id % _fallbacks.length];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _resolveColor(folder);
+    final linkCount = folder.links.length;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 130,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: c.border, width: 0.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(Icons.folder_rounded, color: color, size: 16),
+            ),
+            const Spacer(),
+            Text(
+              folder.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.labelMedium!.copyWith(
+                fontWeight: FontWeight.w700,
+                color: c.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '$linkCount ${linkCount == 1 ? 'link' : 'links'}',
+              style: theme.labelSmall!
+                  .copyWith(color: c.textHint, fontSize: 10),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── New Collection Mini Card ──────────────────────────────────────────────────
+
+class _NewCollectionMiniCard extends StatelessWidget {
+  final AppColorScheme c;
+  final TextTheme theme;
+  final String label;
+  final VoidCallback onTap;
+
+  const _NewCollectionMiniCard({
+    required this.c,
+    required this.theme,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: CustomPaint(
+        painter: _DashedBorderPainter(color: c.border),
+        child: Container(
+          width: 130,
+          decoration: BoxDecoration(
+            color: c.surface.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: c.border, width: 1.5),
+                    ),
+                    child: Icon(Icons.add_rounded,
+                        color: c.textHint, size: 18),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.labelSmall!.copyWith(
+                      color: c.textHint,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

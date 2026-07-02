@@ -12,12 +12,9 @@ import '../../../theme/recallr_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/services/notification_service.dart';
+import '../notifications/notification_providers.dart';
 import '../../repositrories/link_providers/link_repository_provider.dart';
 import '../../repositrories/link_providers/recent_links_provider.dart';
-
-final _notifEnabledProvider =
-    FutureProvider.autoDispose<bool>((_) => NotificationService.instance.isEnabled());
 
 final _nextReadDismissedProvider = StateProvider<bool>((ref) => false);
 
@@ -160,7 +157,7 @@ class _RecallrHomeState extends ConsumerState<RecallrHome> {
                         ),
                         const Spacer(),
                         GestureDetector(
-                          onTap: () => context.go('/profile'),
+                          onTap: () => context.push('/notifications'),
                           child: Container(
                             width: 36,
                             height: 36,
@@ -174,7 +171,8 @@ class _RecallrHomeState extends ConsumerState<RecallrHome> {
                               children: [
                                 Icon(Icons.notifications_outlined,
                                     size: 18, color: c.textSecondary),
-                                if (ref.watch(_notifEnabledProvider).valueOrNull == true)
+                                if (ref.watch(notifEnabledProvider) ||
+                                    (ref.watch(reviewDueCountProvider).valueOrNull ?? 0) > 0)
                                   Positioned(
                                     top: 7,
                                     right: 7,
@@ -453,7 +451,7 @@ class _HeroTitleDelegate extends SliverPersistentHeaderDelegate {
   double get minExtent => 50.0;
 
   @override
-  double get maxExtent => 108.0;
+  double get maxExtent => 118.0;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
@@ -493,23 +491,25 @@ class _HeroTitleDelegate extends SliverPersistentHeaderDelegate {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text('Your Mind,', style: expandedTextStyle),
-                      ClipRect(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 450),
-                          layoutBuilder: (current, previous) => Stack(
-                            alignment: Alignment.topLeft,
-                            clipBehavior: Clip.hardEdge,
-                            children: [...previous, if (current != null) current],
-                          ),
-                          transitionBuilder: _wordSlideTransition,
-                          child: ShaderMask(
-                            key: ValueKey('exp-$wordIdx'),
-                            shaderCallback: (bounds) =>
-                                AppColors.brandGradient.createShader(bounds),
-                            blendMode: BlendMode.srcIn,
-                            child: Text(
-                              _heroWords[wordIdx],
-                              style: expandedTextStyle.copyWith(color: Colors.white),
+                      Flexible(
+                        child: ClipRect(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 450),
+                            layoutBuilder: (current, previous) => Stack(
+                              alignment: Alignment.topLeft,
+                              clipBehavior: Clip.hardEdge,
+                              children: [...previous, if (current != null) current],
+                            ),
+                            transitionBuilder: _wordSlideTransition,
+                            child: ShaderMask(
+                              key: ValueKey('exp-$wordIdx'),
+                              shaderCallback: (bounds) =>
+                                  AppColors.brandGradient.createShader(bounds),
+                              blendMode: BlendMode.srcIn,
+                              child: Text(
+                                _heroWords[wordIdx],
+                                style: expandedTextStyle.copyWith(color: Colors.white),
+                              ),
                             ),
                           ),
                         ),

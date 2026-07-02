@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:recallr/theme/recallr_colors.dart';
 
+import '../core/services/link_health_service.dart';
 import '../data/models/Link/link_model.dart';
 import 'link_options_sheet.dart';
 
@@ -36,6 +37,17 @@ class LinkCard extends ConsumerStatefulWidget {
 
 class _LinkCardState extends ConsumerState<LinkCard> {
   bool _pressed = false;
+  bool? _healthBroken; // null = unchecked, false = ok, true = broken
+
+  @override
+  void initState() {
+    super.initState();
+    LinkHealthService.instance
+        .getCachedStatus(widget.link.id)
+        .then((alive) {
+      if (mounted && alive == false) setState(() => _healthBroken = true);
+    });
+  }
 
   int get _readTime {
     final words =
@@ -250,6 +262,11 @@ class _LinkCardState extends ConsumerState<LinkCard> {
                               style: theme.bodySmall!
                                   .copyWith(color: c.textHint, fontSize: 10),
                             ),
+                            if (_healthBroken == true) ...[
+                              const SizedBox(width: 6),
+                              Icon(Icons.link_off_rounded,
+                                  size: 10, color: c.coral),
+                            ],
                             const Spacer(),
                             GestureDetector(
                               behavior: HitTestBehavior.opaque,

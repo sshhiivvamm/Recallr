@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "534349410611",
+    "project_id": "recallr-5e75e",
+    "storage_bucket": "recallr-5e75e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:534349410611:android:c4dbe698e78826dce50e46",
+        "android_client_info": {
+          "package_name": "com.recallr.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDAbNQreCnFxwWJUVmg3YeRz4kOIKOE-JA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

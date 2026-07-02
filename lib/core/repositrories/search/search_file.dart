@@ -10,15 +10,27 @@ Future<List<SearchResult>> searchLinks(
     ) async {
   final queryLower = params.query?.toLowerCase().trim();
 
-  // Fetch all then filter in Dart — avoids Isar QueryBuilder generic type issues
-  List<LinkModel> results = await isar.linkModels.where().findAll();
-
-  if (params.isFavorite != null) {
-    results = results.where((l) => l.isFavorite == params.isFavorite).toList();
-  }
-
-  if (params.isRead != null) {
-    results = results.where((l) => l.isRead == params.isRead).toList();
+  // Push the most-selective boolean filters into Isar so we don't load the
+  // full table into Dart when the user is browsing Favourites or Unread.
+  List<LinkModel> results;
+  if (params.isFavorite != null && params.isRead != null) {
+    results = await isar.linkModels
+        .filter()
+        .isFavoriteEqualTo(params.isFavorite!)
+        .isReadEqualTo(params.isRead!)
+        .findAll();
+  } else if (params.isFavorite != null) {
+    results = await isar.linkModels
+        .filter()
+        .isFavoriteEqualTo(params.isFavorite!)
+        .findAll();
+  } else if (params.isRead != null) {
+    results = await isar.linkModels
+        .filter()
+        .isReadEqualTo(params.isRead!)
+        .findAll();
+  } else {
+    results = await isar.linkModels.where().findAll();
   }
 
   if (params.folder != null) {
@@ -37,15 +49,30 @@ Future<List<SearchResult>> searchLinks(
         .toList();
   }
 
+  // Push text matching to Isar's C layer when a query is present.
+  // This avoids deserializing every record into Dart just to call .contains().
   if (queryLower != null && queryLower.isNotEmpty) {
-    results = results.where((link) {
-      return link.title.toLowerCase().contains(queryLower) ||
-          (link.description?.toLowerCase().contains(queryLower) ?? false) ||
-          (link.notes?.toLowerCase().contains(queryLower) ?? false) ||
-          link.url.toLowerCase().contains(queryLower) ||
-          (link.domain?.toLowerCase().contains(queryLower) ?? false) ||
-          (link.siteName?.toLowerCase().contains(queryLower) ?? false);
-    }).toList();
+    results = await isar.linkModels
+        .filter()
+        .titleContains(queryLower, caseSensitive: false)
+        .or()
+        .descriptionContains(queryLower, caseSensitive: false)
+        .or()
+        .notesContains(queryLower, caseSensitive: false)
+        .or()
+        .urlContains(queryLower, caseSensitive: false)
+        .or()
+        .domainContains(queryLower, caseSensitive: false)
+        .or()
+        .siteNameContains(queryLower, caseSensitive: false)
+        .findAll();
+    // Boolean filters applied in Dart — just field comparisons on already-loaded objects.
+    if (params.isFavorite != null) {
+      results = results.where((l) => l.isFavorite == params.isFavorite!).toList();
+    }
+    if (params.isRead != null) {
+      results = results.where((l) => l.isRead == params.isRead!).toList();
+    }
   }
 
   switch (params.sort) {
@@ -68,13 +95,16 @@ Future<List<SearchResult>> searchLinks(
       .map((link) => _makeResult(link, params.query?.trim()))
       .toList();
 
-  // Also surface links whose saved highlights match the query
+  // Also surface links whose saved highlights match the query.
+  // textContains() filters C-side in Isar — avoids loading all highlight text.
   if (queryLower != null && queryLower.isNotEmpty) {
     final existingIds = results.map((l) => l.id).toSet();
     final seenIds = <int>{};
-    final allHighlights = await isar.highlightModels.where().findAll();
-    for (final h in allHighlights) {
-      if (!h.text.toLowerCase().contains(queryLower)) continue;
+    final matchingHighlights = await isar.highlightModels
+        .filter()
+        .textContains(queryLower, caseSensitive: false)
+        .findAll();
+    for (final h in matchingHighlights) {
       if (existingIds.contains(h.linkId)) continue; // already in link results
       if (!seenIds.add(h.linkId)) continue;          // deduplicate same link
       final link = await isar.linkModels.get(h.linkId);

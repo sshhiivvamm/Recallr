@@ -18,19 +18,19 @@ Future<void> showEditLink(
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     useRootNavigator: true,
-    builder: (_) => _EditLinkSheet(link: link),
+    builder: (_) => EditLinkSheet(link: link),
   );
 }
 
-class _EditLinkSheet extends ConsumerStatefulWidget {
+class EditLinkSheet extends ConsumerStatefulWidget {
   final LinkModel link;
-  const _EditLinkSheet({required this.link});
+  const EditLinkSheet({super.key, required this.link});
 
   @override
-  ConsumerState<_EditLinkSheet> createState() => _EditLinkSheetState();
+  ConsumerState<EditLinkSheet> createState() => EditLinkSheetState();
 }
 
-class _EditLinkSheetState extends ConsumerState<_EditLinkSheet> {
+class EditLinkSheetState extends ConsumerState<EditLinkSheet> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _notesCtrl;
   Set<int> _selectedTagIds = {};

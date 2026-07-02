@@ -418,7 +418,7 @@ class _ReReaderState extends ConsumerState<ReReader> {
       backgroundColor: c.background,
       body: Column(
         children: [
-          _TopBar(
+          ReaderTopBar(
             title:            _pageTitle.isEmpty ? _domainOf(widget.url) : _pageTitle,
             loading:          _loading,
             readerMode:       _readerMode,
@@ -846,8 +846,12 @@ class _HighlightTile extends StatelessWidget {
 
 // ── Top bar ───────────────────────────────────────────────────────────────────
 
-class _TopBar extends StatelessWidget {
-  const _TopBar({
+/// Public (unlike its sibling private widgets in this file) so golden tests
+/// can render the reader's chrome without needing a real `WebViewController`
+/// — see `test/golden/re_reader_golden_test.dart`.
+class ReaderTopBar extends StatelessWidget {
+  const ReaderTopBar({
+    super.key,
     required this.title,
     required this.loading,
     required this.readerMode,

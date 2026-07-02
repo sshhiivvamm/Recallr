@@ -1,6 +1,6 @@
 # Recallr — Complete Project Documentation
 
-> Generated: 2026-06-11 | Flutter 3.x | Riverpod + Isar + GoRouter | Clean Architecture + Feature First
+> Generated: 2026-06-11 | Last updated: 2026-06-30 | Flutter 3.41.6 | Riverpod + Isar + GoRouter + Firebase | Clean Architecture + Feature First
 
 ---
 
@@ -84,24 +84,28 @@ Recallr solves three compounding problems:
 |---|---|---|
 | 1 | Share-sheet link capture with metadata fetch | ✅ Built |
 | 2 | Home feed with recent saves (animated cards) | ✅ Built |
-| 3 | In-app reader (WebView) | ✅ Built |
-| 4 | Search with Unread / Favorites filters | ✅ Built |
-| 5 | Tags / Categories with color + icon | ✅ Built |
-| 6 | Collections (Folders) with color + icon | ✅ Built |
+| 3 | In-app reader (WebView) with highlights | ✅ Built |
+| 4 | Search with Unread / Favorites / Sort filters | ✅ Built |
+| 5 | Tags / Categories with color + icon + rename + delete | ✅ Built |
+| 6 | Collections (Folders) with color + icon + rename + delete | ✅ Built |
 | 7 | Discover Mode ("Remember This?") | ✅ Built |
-| 8 | SM-2 Spaced Repetition Review Queue | ✅ Built |
-| 9 | Reading Streak tracking | ✅ Built |
-| 10 | Reading Time estimate badge | ✅ Built |
-| 11 | Swipe-to-favorite on home feed | ✅ Built |
-| 12 | Link options sheet (edit, open, copy, delete, favorite, read) | ✅ Built |
-| 13 | Edit Link sheet (title, notes, tags, folder) | ✅ Built |
-| 14 | Link Health Checker (HEAD/GET HTTP probe) | ✅ Built |
-| 15 | JSON + CSV export via share_plus | ✅ Built |
-| 16 | Spaced-repetition push notifications (daily 10 AM) | ✅ Built |
-| 17 | Dark / Light theme with AppColorScheme tokens | ✅ Built |
-| 18 | Onboarding flow | ✅ Built |
-| 19 | All-Links library screen with list/grid toggle | ✅ Built |
-| 20 | Profile screen with stats + 7-day activity chart | ✅ Built |
+| 8 | SM-2 Spaced Repetition Review Queue (4 quality levels) | ✅ Built |
+| 9 | SM-2 state persisted in Isar (survives reinstall + export) | ✅ Built |
+| 10 | Reading Streak tracking | ✅ Built |
+| 11 | Reading Time estimate badge | ✅ Built |
+| 12 | Swipe-to-favorite on home feed | ✅ Built |
+| 13 | Link options sheet (edit, open, copy, delete, favorite, read) | ✅ Built |
+| 14 | Edit Link sheet (title, notes, tags, folder) | ✅ Built |
+| 15 | Link Health Checker (HEAD/GET HTTP probe + broken-link badge on card) | ✅ Built |
+| 16 | JSON + CSV export (includes SM-2 state, highlights, collections) | ✅ Built |
+| 17 | Backup / Restore (auto-backup on startup + manual restore from Profile) | ✅ Built |
+| 18 | Spaced-repetition push notifications (daily, reschedules after session) | ✅ Built |
+| 19 | Dark / Light theme with AppColorScheme tokens | ✅ Built |
+| 20 | Onboarding flow (gated, shown once) | ✅ Built |
+| 21 | All-Links library screen with list/grid toggle | ✅ Built |
+| 22 | Profile screen with stats + 7-day activity chart | ✅ Built |
+| 23 | Firebase Crashlytics (Flutter + Dart async error capture) | ✅ Built |
+| 24 | Native splash screen (flutter_native_splash) | ✅ Built |
 
 ---
 
@@ -148,7 +152,7 @@ Recallr solves three compounding problems:
 - FR-02: On save, the app must fetch OG metadata (title, description, thumbnail, favicon, domain) via `metadata_fetch`.
 - FR-03: URL must be unique; saving a duplicate must update the existing record, not create a new one.
 - FR-04: Links must be editable (title, notes, tags, folder) at any time.
-- FR-05: Link deletion must require confirmation and remove all SM-2 data from SharedPreferences.
+- FR-05: Link deletion must require confirmation; SM-2 data is stored on the `LinkModel` record and is automatically removed with it.
 
 ### Organisation
 - FR-06: Tags have a unique name, optional colorHex, optional icon string, and isDefault flag.
@@ -157,7 +161,8 @@ Recallr solves three compounding problems:
 
 ### Discovery & Review
 - FR-09: Discover card must show a random unread link saved more than 7 days ago.
-- FR-10: Review queue must implement SM-2: quality ratings 1 (Forgot), 3 (Hard), 4 (Good), 5 (Easy).
+- FR-10: Review queue implements SM-2: quality ratings 1 (Forgot), 3 (Hard), 4 (Good), 5 (Easy). All four buttons are present in the review UI.
+- FR-10a: After a review session completes, the daily notification must be rescheduled with the updated due count.
 - FR-11: Review due count must be computed at app launch and streamed reactively.
 
 ### Notifications
@@ -170,7 +175,8 @@ Recallr solves three compounding problems:
 
 ### Link Health
 - FR-16: Health check must send HEAD then GET if HEAD fails; result cached in SharedPreferences with a TTL of 24 hours.
-- FR-17: Broken links must show a warning badge on their card.
+- FR-17: Broken links must show a `link_off` icon in the card footer. Status is loaded from SharedPreferences cache on card render; only shown when result is definitively `false`.
+- FR-18: Users must be able to trigger a manual restore from the auto-backup file via a button in Profile → Data section, with a confirmation dialog before overwriting.
 
 ---
 
@@ -192,7 +198,7 @@ Recallr solves three compounding problems:
 
 - Users will grant notification permission when prompted.
 - `metadata_fetch` successfully resolves OG metadata for > 80% of consumer URLs.
-- SM-2 state stored in SharedPreferences is acceptable for MVP; will migrate to Isar in Phase 3.
+- SM-2 state is stored directly on `LinkModel` in Isar. A one-time `Sm2MigrationService` runs on the first launch of v1.0+ to carry any data from the old SharedPreferences format.
 - Supabase sync is Phase 2; the current Isar schema is the source of truth.
 
 ---
@@ -212,7 +218,7 @@ Recallr solves three compounding problems:
 |---|---|---|---|
 | `metadata_fetch` fails for paywalled / JS-rendered pages | High | Medium | Show URL-only fallback; let user edit title manually |
 | Isar schema migration breaks existing installs | Medium | High | Version Isar schema carefully; write migration tests before any field change |
-| SM-2 data loss on app reinstall (SharedPreferences) | Medium | Medium | Phase 3: migrate SM-2 state into Isar |
+| SM-2 data loss on app reinstall | Low | Medium | **Resolved** — SM-2 fields are on `LinkModel` in Isar; included in backup/export/restore |
 | Share intent URL arrives before Isar initialises | Low | High | `pendingSharedUrl` global holds URL until `MainNavigation` first frame |
 | App Store rejection for background notification abuse | Low | High | Notifications are user-toggleable; daily max = 1 |
 
@@ -304,7 +310,8 @@ flowchart TD
         RATE -- 5 Easy --> SM2_E[Sm2Service.review 5]
         SM2_RESET & SM2_H & SM2_G & SM2_E --> NEXT_CARD{More cards?}
         NEXT_CARD -- Yes --> REVIEW
-        NEXT_CARD -- No --> HOME
+        NEXT_CARD -- No --> RESCHED[rescheduleWithCount — update daily notification]
+        RESCHED --> HOME
     end
 
     subgraph READER_FLOW[Reader]
@@ -677,7 +684,7 @@ flowchart TD
 | │   Description / Notes            │   |
 | └──────────────────────────────────┘   |
 |                                        |
-| [😶 Forgot] [😓 Hard] [😊 Good] [😄 Easy]|
+| [😶 Forgot][😓 Hard][😊 Good][😄 Easy] |
 |                                        |
 +----------------------------------------+
 ```
@@ -791,9 +798,10 @@ flowchart TD
 
 | Collection | Purpose | Records (typical) |
 |---|---|---|
-| `LinkModel` | Core link entity | 100–10,000 |
+| `LinkModel` | Core link entity (includes SM-2 state) | 100–10,000 |
 | `TagModel` | User-defined categories | 5–100 |
 | `FolderModel` | Folder/collection groupings | 1–50 |
+| `HighlightModel` | Text highlights from in-app reader | 0–500 |
 
 ---
 
@@ -806,16 +814,21 @@ flowchart TD
 | `id` | `Id` (autoIncrement) | Primary key | PK |
 | `title` | `String` | Page title (OG or user-edited) | `@Index()` |
 | `url` | `String` | Full URL | `@Index(unique: true)` |
-| `description` | `String?` | OG description | — |
-| `notes` | `String?` | User-written notes | — |
+| `description` | `String?` | OG description | `@Index(type: IndexType.value, caseSensitive: false)` |
+| `notes` | `String?` | User-written notes | `@Index(type: IndexType.value, caseSensitive: false)` |
 | `thumbnail` | `String?` | OG image URL | — |
 | `favicon` | `String?` | Site favicon URL | — |
 | `domain` | `String?` | Parsed domain (e.g. github.com) | — |
 | `siteName` | `String?` | OG site_name | — |
 | `isFavorite` | `bool` | Bookmarked flag | — |
 | `isRead` | `bool` | Read completion flag | — |
-| `createdAt` | `DateTime` | Save timestamp | — |
+| `createdAt` | `DateTime` | Save timestamp | `@Index()` |
 | `lastOpenedAt` | `DateTime?` | Last reader open timestamp | — |
+| `updatedAt` | `DateTime?` | Last edit timestamp | — |
+| `smRepetitions` | `int` | SM-2 repetition count | — |
+| `smEaseFactor` | `double` | SM-2 ease factor (default 2.5) | — |
+| `smInterval` | `int` | SM-2 interval in days | — |
+| `smNextReview` | `DateTime?` | Next scheduled review date | — |
 | `tags` | `IsarLinks<TagModel>` | Many-to-many tags | — |
 | `folder` | `IsarLink<FolderModel>` | Many-to-one folder | — |
 
@@ -832,8 +845,12 @@ class LinkModel {
   @Index(unique: true)
   late String url;
 
+  @Index(type: IndexType.value, caseSensitive: false)
   String? description;
+
+  @Index(type: IndexType.value, caseSensitive: false)
   String? notes;
+
   String? thumbnail;
   String? favicon;
   String? domain;
@@ -842,8 +859,16 @@ class LinkModel {
   bool isFavorite = false;
   bool isRead = false;
 
+  @Index()
   DateTime createdAt = DateTime.now();
   DateTime? lastOpenedAt;
+  DateTime? updatedAt;
+
+  // SM-2 spaced-repetition state — persisted here so backup/restore preserves it
+  int smRepetitions = 0;
+  double smEaseFactor = 2.5;
+  int smInterval = 1;
+  DateTime? smNextReview;
 
   final tags = IsarLinks<TagModel>();
   final folder = IsarLink<FolderModel>();
@@ -853,16 +878,22 @@ class LinkModel {
 ### Query Examples
 
 ```dart
-// Recent 10 links
+// Recent 10 links — uses @Index() on createdAt
 isar.linkModels.where().sortByCreatedAtDesc().limit(10).findAll();
 
-// Unread links older than 7 days (Discover)
-final cutoff = DateTime.now().subtract(const Duration(days: 7));
-isar.linkModels.where().findAll().then((all) =>
-  all.where((l) => !l.isRead && l.createdAt.isBefore(cutoff)));
+// Favourites only — push to Isar before Dart filtering
+isar.linkModels.filter().isFavoriteEqualTo(true).findAll();
 
-// Watch total count (reactive)
-isar.linkModels.where().watch(fireImmediately: true).map((l) => l.length);
+// Unread links — Isar filter
+isar.linkModels.filter().isReadEqualTo(false).findAll();
+
+// Watch total count efficiently (no full-list emit)
+isar.linkModels.watchLazy(fireImmediately: true)
+    .asyncMap((_) => isar.linkModels.count());
+
+// SM-2 queue — check isDue() on already-loaded models (no extra I/O)
+final allLinks = await isar.linkModels.where().findAll();
+final due = allLinks.where((l) => Sm2Service.instance.isDue(_fromModel(l)));
 
 // Links by tag (after loading backlinks)
 tag.links.filter().isReadEqualTo(false).findAll();
@@ -940,39 +971,76 @@ class FolderModel {
 
 ---
 
-## 4.5 Entity Relationship Diagram
+## 4.5 HighlightModel
+
+### Fields
+
+| Field | Type | Description | Index |
+|---|---|---|---|
+| `id` | `Id` (autoIncrement) | Primary key | PK |
+| `linkId` | `int` | FK → `LinkModel.id` | `@Index()` |
+| `text` | `String` | Selected highlight text | `@Index()` |
+| `colorHex` | `String?` | Highlight colour (`#RRGGBB`) | — |
+| `note` | `String?` | User annotation on highlight | — |
+| `createdAt` | `DateTime` | Highlight creation time | — |
+
+### Flutter Model Code
+
+```dart
+@collection
+class HighlightModel {
+  Id id = Isar.autoIncrement;
+
+  @Index()
+  late int linkId;
+
+  @Index()
+  late String text;
+
+  String? colorHex;
+  String? note;
+  DateTime createdAt = DateTime.now();
+}
+```
+
+**Note:** `@Index()` on `linkId` makes `filter().linkIdEqualTo()` O(log n) instead of O(n). `@Index()` on `text` allows Isar-side `textContains()` filtering during highlight search, avoiding loading all highlights into Dart.
+
+---
+
+## 4.6 Entity Relationship Diagram
 
 ```
 LinkModel (many) ────< IsarLinks >──── (many) TagModel
      │
-     └── IsarLink (many-to-one) ───────────── FolderModel
+     ├── IsarLink (many-to-one) ───────────── FolderModel
+     │
+     └── linkId reference ─────────────────── HighlightModel (many)
 ```
 
 - One `LinkModel` → zero or one `FolderModel`
 - One `LinkModel` → zero or many `TagModel`
 - One `TagModel` → zero or many `LinkModel` (via `@Backlink`)
 - One `FolderModel` → zero or many `LinkModel` (via `@Backlink`)
+- One `LinkModel` → zero or many `HighlightModel` (by `linkId` field, not `IsarLink`)
 
 ---
 
-## 4.6 SM-2 Data (SharedPreferences)
+## 4.7 SM-2 Data (Isar — on LinkModel)
 
-SM-2 scheduling data is stored outside Isar in SharedPreferences, keyed by `sm2_{linkId}`:
+SM-2 scheduling state is stored directly as fields on `LinkModel` so that it survives reinstall, is included in backup/export/restore, and requires no separate I/O during review.
 
-```json
-{
-  "reps": 3,
-  "ease": 2.5,
-  "interval": 15,
-  "nextReview": "2026-06-26T10:00:00.000"
-}
-```
+| Field | Default | Meaning |
+|---|---|---|
+| `smRepetitions` | `0` | Number of successful reviews in a row |
+| `smEaseFactor` | `2.5` | Ease multiplier (min 1.3) |
+| `smInterval` | `1` | Current interval in days |
+| `smNextReview` | `null` (due immediately) | Next review date |
 
-**Migration plan (Phase 3):** Add `sm2Data` as embedded object on `LinkModel` to keep all data in one store and enable cloud sync of review state.
+**Migration:** `Sm2MigrationService` runs once on first launch of v1.0+ and copies any existing `sm2_{id}` SharedPreferences keys into the corresponding `LinkModel` fields, then removes the prefs keys.
 
 ---
 
-## 4.7 Offline Sync Strategy
+## 4.8 Offline Sync Strategy
 
 **Current (MVP):** Fully offline. Isar is the single source of truth. No sync.
 
@@ -984,19 +1052,20 @@ SM-2 scheduling data is stored outside Isar in SharedPreferences, keyed by `sm2_
 
 ---
 
-## 4.8 Cache Strategy
+## 4.9 Cache Strategy
 
 | Data | Location | TTL |
 |---|---|---|
 | Link metadata | Isar (permanent) | No expiry |
-| SM-2 schedule | SharedPreferences | No expiry (until reviewed) |
+| SM-2 schedule | Isar on `LinkModel` | No expiry (until reviewed) |
+| Highlights | Isar `HighlightModel` | No expiry |
 | Link health check result | SharedPreferences | 24 hours |
-| Recent links stream | Isar `watch()` | Real-time (no cache) |
-| Review due count | In-memory (Riverpod) | Per session |
+| Recent links stream | Isar `watchLazy()` + `count()` | Real-time (no cache) |
+| Review due count | In-memory (Riverpod `.autoDispose`) | Per session |
 
 ---
 
-## 4.9 Migration Strategy
+## 4.10 Migration Strategy
 
 Isar 3.x has no built-in migration support. Approach:
 
@@ -1030,7 +1099,8 @@ The rule is: dependencies point inward only. Presentation depends on Domain. Dom
 
 ```
 lib/
-├── main.dart                          # Entry point, initialisation
+├── main.dart                          # Entry point; Firebase init, Crashlytics wiring, SM-2 migration
+├── firebase_options.dart              # Generated Firebase config (FlutterFire CLI)
 ├── app_routes.dart                    # GoRouter config
 │
 ├── theme/                             # Design system
@@ -1085,7 +1155,8 @@ lib/
 │   │   │   ├── re_profile.dart
 │   │   │   ├── re_reader.dart
 │   │   │   ├── re_review.dart
-│   │   │   └── re_onboarding.dart
+│   │   │   ├── re_onboarding.dart
+│   │   │   └── re_privacy_policy.dart
 │   │   ├── links/
 │   │   │   └── all_links.dart
 │   │   ├── category/
@@ -1111,12 +1182,14 @@ lib/
 │   │
 │   └── services/                      # Standalone services (no Riverpod)
 │       ├── auto_categorizer.dart
+│       ├── backup_service.dart        # Auto-backup + manual restore to Isar
 │       ├── export_service.dart        # JSON / CSV export
 │       ├── link_health_service.dart   # HTTP HEAD+GET probe
 │       ├── notification_service.dart  # flutter_local_notifications
 │       ├── reader_prefs.dart          # Reader font size / theme prefs
 │       ├── share_intent_service.dart  # receive_sharing_intent wrapper
-│       ├── sm2_service.dart           # Spaced repetition algorithm
+│       ├── sm2_service.dart           # Spaced repetition algorithm (reads/writes Isar)
+│       ├── sm2_migration_service.dart # One-time migration from SharedPreferences → Isar
 │       └── tag_suggester.dart         # Rule-based tag suggestions
 ```
 
@@ -1227,19 +1300,20 @@ A `SupabaseSyncRepository` will wrap the Supabase client and implement:
 | Metadata fetch | `try/catch` → fallback to URL-as-title |
 | HTTP health check | `try/catch` → mark as broken |
 | Riverpod `AsyncValue` | Use `.when(data:, loading:, error:)` in all screen builders |
-| Unhandled exceptions | `FlutterError.onError` + `PlatformDispatcher.instance.onError` in `main()` (Phase 2: send to Crashlytics) |
+| Unhandled exceptions | `FlutterError.onError` + `PlatformDispatcher.instance.onError` → `FirebaseCrashlytics` (live in production) |
 
 ---
 
 ## 5.10 Logging Strategy
 
-**MVP:** `debugPrint()` only, stripped in release builds.
+**Current:** Firebase Crashlytics is active in production.
 
-**Phase 2:**
-- Add `logger` package.
-- Log levels: VERBOSE → DEBUG → INFO → WARNING → ERROR.
-- ERROR level → send to Firebase Crashlytics.
-- No PII (no URLs, titles, or notes) in logs.
+- `FlutterError.onError` → `FirebaseCrashlytics.instance.recordFlutterFatalError` (framework errors)
+- `PlatformDispatcher.instance.onError` → `recordError(..., fatal: true)` (Dart async errors)
+- `debugPrint()` is used in debug builds only; zero `debugPrint` calls in release-sensitive paths (confirmed in reader, SM-2 service).
+- No PII (no URLs, titles, or notes) must ever be included in crash reports.
+
+**Next step:** Add `logger` package with log levels (VERBOSE → ERROR). ERROR level forwards to Crashlytics; lower levels are dev-only.
 
 ---
 
@@ -1277,8 +1351,154 @@ Build with: `flutter run --dart-define=SUPABASE_URL=https://...`
 | Unit | `flutter_test` | Repository methods, SM-2 algorithm, Export service |
 | Integration | `isar_test` | Full CRUD on real Isar in-memory DB |
 | Widget | `flutter_test` + `riverpod_test` | Home screen, Save sheet, Review screen |
-| Golden | `golden_toolkit` | Card designs, Profile stats tile |
+| Golden | `alchemist` | All 11 screens + key shared widgets, light/dark |
 | E2E | `integration_test` | Core happy paths: save → review → export |
+
+### 5.13.1 Golden Test Suite — Status (as of 2026-07-02)
+
+**Goal:** golden (screenshot) tests for all 11 screens in `lib/core/features/view/` plus key
+shared widgets in `lib/common/`, each in light and dark theme, at a fixed phone viewport
+(390×844), using `alchemist` (added as a dev dependency).
+
+**Decisions locked in with the user:**
+- Package: `alchemist` (not `golden_toolkit`, which is unmaintained).
+- Scope: all 11 view screens + `edit_link_sheet`, `add_category_sheet`,
+  `link_options_sheet`, `chips_filter`, `re_appBar` (this last one is a `Placeholder()` stub —
+  not worth testing).
+- Data: no real device Isar DB. Each test opens a **fresh temp-directory Isar instance**
+  (same pattern as the existing `test/link_repository_test.dart`) and overrides the app's
+  single `isarProvider` (`lib/core/database/providers/isar_provider.dart`) with it. This is
+  the one seam that reaches every screen — many screens read **file-private** riverpod
+  providers (e.g. `_tagLinksProvider` in `re_filtered_links.dart`, `_searchResultsProvider` in
+  `re_search.dart`, `_notifEnabledProvider` in `recallr_home.dart`/`re_profile.dart`) that
+  can't be overridden by identity from an external test file, but every one of them ultimately
+  reads `isarProvider`.
+- Variants: light + dark theme, single phone size, per screen/state.
+
+**Files written so far** (`test/golden/`):
+- `golden_helpers.dart` — `openGoldenIsar()`, `goldenApp()` (ProviderScope + MaterialApp
+  wrapper using the real `AppTheme.light()`/`AppTheme.dark()`), `setGoldenViewSize()`,
+  `pumpForAsyncData()`.
+- `fixtures.dart` — `seedTypicalData(isar)` seeds a realistic data set (3 tags, 2 folders,
+  3 links covering favorite/read/unread/notes/thumbnail states, 1 highlight) and returns a
+  `GoldenFixtures` handle so individual tests can reference specific rows.
+- `recallr_home_golden_test.dart` — reference/template test (populated + empty state,
+  light + dark) for `recallr_home.dart`, the most complex screen (StreamProviders, a
+  `Timer.periodic` word-cycle animation, a private `FutureProvider.autoDispose`).
+
+**Not yet written:** golden tests for the other 10 screens (`re_category`,
+`re_filtered_links`, `re_onboarding`, `re_profile`, `re_review`, `re_search`, `re_reader`,
+`re_collections`, `re_collection_links`, `re_addcategory`, `re_privacy_policy`) and the 4
+testable shared widgets. `re_reader.dart` will need a documented exception: it drives a real
+`WebViewController` (platform view), which isn't renderable in a widget/golden test without
+platform-channel mocking — plan is to golden only its chrome (top bar / loading state), not
+the web content.
+
+**Blocking issue — RESOLVED (2026-07-03):**
+
+Flutter widget tests (`testWidgets`, which `alchemist`'s `goldenTest` wraps) run the test body
+inside Flutter's `AutomatedTestWidgetsFlutterBinding` fake-async zone. Real async I/O that
+isn't just Dart microtasks — file system, isolates, native plugin channels — does not
+complete inside that zone unless explicitly escaped via `await tester.runAsync(() async {...})`.
+
+Root cause, confirmed via isolated repro tests: `isar.linkModels.where().watch()` delivers
+events through a real native `ReceivePort` (a genuine OS-level message), not a Dart
+microtask/timer. `tester.pump(duration)` only advances Flutter's *fake* clock and flushes
+*already-arrived* microtasks — it never actually yields to the real event loop, so a pending
+native watcher message can sit undelivered forever no matter how many fake-time pumps you do,
+even wrapped in `tester.runAsync` if the pumping itself uses fake-time-only `pump(duration)`
+calls. A raw `Isar.open()`/`put()`/`get()` call fully inside one continuous `runAsync` block
+works fine (confirmed — no fake zone ever involved); the problem was specific to combining
+real Isar streams with the widget pump lifecycle.
+
+**The fix** (implemented in `test/golden/golden_helpers.dart`'s `pumpForAsyncData`): alternate
+a real `Future.delayed(...)` with a `tester.pump(...)`, both inside a single `tester.runAsync`
+block, as `goldenTest`'s `pumpBeforeTest` hook (which alchemist calls *after* its own initial
+`pumpWidget`, so the `StreamProvider`'s `.listen()` is already registered by the time this
+runs). The real delay lets the native watcher message actually arrive; the following `pump()`
+flushes the resulting microtask into a widget rebuild. One iteration was enough in isolated
+repro; the harness does several for headroom on slower machines.
+
+Two secondary blockers surfaced and were also fixed while getting a real screen to render:
+- `CachedNetworkImage` (link thumbnails/favicons) throws `MissingPluginException` for
+  `path_provider` when it tries to open its disk cache in a headless test — fixed by mocking
+  the `plugins.flutter.io/path_provider` method channel (`mockPathProvider()` in
+  `golden_helpers.dart`). Real network fetches still deterministically fail (Flutter's test
+  binding returns HTTP 400 for all requests), so thumbnails render as their error/placeholder
+  state — expected and consistent, not something goldens need to avoid.
+- `flutter_cache_manager`'s disk-cache bookkeeping needs a real sqflite `databaseFactory`,
+  which isn't registered in a headless run (`Bad state: databaseFactory not initialized`) —
+  fixed by adding `sqflite_common_ffi` (pure-Dart/FFI sqlite, no platform plugin needed) as a
+  dev dependency and calling `sqfliteFfiInit()` / `databaseFactory = databaseFactoryFfi` once
+  per process (`ensureSqfliteFfiInitialized()` in `golden_helpers.dart`).
+
+The previously-suspected **390×1750 sizing bug turned out not to be a bug**: `GoldenTestGroup`
+with `columns: 1` intentionally stacks all of its `GoldenTestScenario`s (light + dark) into one
+composite PNG with labels between them — each individual scenario *is* correctly bounded to
+390×844 inside that composite, visible in the generated image. No fix needed.
+
+`recallr_home_golden_test.dart` (both `populated` and `empty` groups, light + dark) now passes
+end to end and has real generated baselines in `test/golden/goldens/`.
+
+### 5.13.2 Golden Test Suite — Complete (2026-07-03)
+
+All 15 target screens/widgets now have golden tests: `recallr_home`, `re_privacy_policy`,
+`chips_filter` (gallery of its 5 fragments), `re_addcategory`, `re_onboarding`,
+`re_collections`, `re_category`, `re_collection_links`, `re_filtered_links`, `re_profile`,
+`re_review`, `re_search` (idle state only), `re_reader` (chrome only), `edit_link_sheet`,
+`link_options_sheet`, `add_category_sheet` — 48 tests total, all passing
+(`flutter test test/golden/`).
+
+**Two recurring problems and their fixes, in case they recur in future screens:**
+
+1. **One-shot `ref.read` races `isarProvider`'s first-frame loading state.** `ReReview` and
+   `LinkOptionsSheet` both call `ref.read(...)` directly in `build()`/a post-frame callback
+   instead of `ref.watch`. On a fresh `ProviderScope`, `isarProvider` is still `AsyncLoading` on
+   the very first frame (even though the underlying future is already resolvable), so
+   `linkRepositoryProvider` (which intentionally `throw`s while loading, with no retry) throws
+   "Isar loading" and the one-shot read never recovers. Fix: pre-warm a `ProviderContainer`
+   (`await container.read(isarProvider.future)`) *before* the first `pumpWidget`, then reuse it
+   via `UncontrolledProviderScope` instead of `goldenApp()`'s plain `ProviderScope`.
+
+2. **Private sheet widgets needed a testability-only rename to public.** Three widgets were
+   private and could only be reached via a `showModalBottomSheet`/`showXyz(...)` function:
+   `_EditLinkSheet` → `EditLinkSheet`, `_LinkOptionsSheet` → `LinkOptionsSheet`, and (for a
+   different reason, see below) `_TopBar` → `ReaderTopBar` in `re_reader.dart`. Making them
+   public let the golden tests pump them directly instead of driving real modal/navigation
+   interaction — deliberately avoided, see the `re_search` note below.
+
+**Deferred/limited coverage:**
+- `re_search`: only the idle ("quick picks") state is tested. Driving the results/no-results
+  states requires `tester.enterText` into the search field — but that reliably **hangs
+  alchemist's golden-capture step** after `pumpBeforeTest` completes (confirmed the enterText +
+  pump logic itself finishes fine via diagnostics with print statements; the hang is inside
+  alchemist's own image capture, and explicitly unfocusing the field first didn't fix it). Not
+  root-caused.
+- `re_reader`: only the chrome (`ReaderTopBar`, extracted to public specifically for this, plus
+  a placeholder for the WebView content area) is tested — `ReReader` builds a real
+  `WebViewController`/`WebViewWidget` unconditionally, with no platform implementation
+  registered in headless tests. A fake `WebViewPlatform` was judged out of proportion to the
+  goal.
+
+**Known flakiness, not fixed:** `seedTypicalData`'s fixture links use `DateTime.now()`-relative
+timestamps, and `recallr_home_populated`, `re_profile_populated`, and `link_options_sheet`
+render human-relative time text from them ("3 hours ago", day-of-week highlighting). Small
+(0.02–0.04%) pixel diffs appear if the suite is re-run enough real time after the baseline was
+captured for that text to reflow. Regenerate with `--update-goldens` when it happens; fixing it
+for good would mean injecting a fake clock everywhere the app calls `DateTime.now()` directly,
+out of scope here.
+
+**Also completed today, unrelated to goldens (both already committed to working state):**
+1. Fixed Crashlytics misconfiguration in `lib/main.dart` — `FlutterError.onError` was wired
+   directly to `recordFlutterFatalError`, reporting non-fatal Flutter render errors (like
+   `RenderFlex` overflow warnings) as fatal crashes, corrupting the crash-free user %. Now
+   uses `recordFlutterError` (non-fatal); `PlatformDispatcher.instance.onError` still reports
+   genuinely uncaught errors as fatal.
+2. Fixed the actual `RenderFlex overflowed by 18 pixels` bug this had been masking: in
+   `lib/core/features/view/recallr_home.dart`'s `_HeroTitleDelegate` (the pinned
+   `SliverPersistentHeader`), the expanded two-line title's second line was wrapped in
+   `Flexible` so it no longer forces its full intrinsic height once the header has partially
+   collapsed but the expanded layout hasn't faded out yet.
 
 ---
 
@@ -1506,7 +1726,7 @@ Body:
 | `SupabaseSyncRepository` (upsert/delete mirror) | 8 | 2 days |
 | `PendingSyncModel` Isar collection + drain-on-reconnect | 5 | 1.5 days |
 | Login / signup screen | 5 | 1 day |
-| Migrate SM-2 data from SharedPreferences → Isar | 3 | 1 day |
+| Migrate SM-2 data from SharedPreferences → Isar | 3 | ✅ Done (Sm2MigrationService, wired in main.dart) |
 | Add `updatedAt` field to LinkModel (schema migration) | 3 | 0.5 day |
 | Connectivity-aware sync indicator in Profile | 2 | 0.5 day |
 | Unit tests for sync repository | 5 | 1 day |
@@ -1525,7 +1745,7 @@ Body:
 | Full-text search via Isar trigram index | 8 | Replaces title-only search |
 | Flutter Web companion (read-only synced view) | 13 | Separate flavour |
 | Browser extension (Chrome) — save to Recallr | 13 | JS → Supabase direct |
-| SM-2 data migration to Isar | 3 | Enables sync of review state |
+| SM-2 sync via Isar fields | 3 | Already on LinkModel — include smRepetitions/smEaseFactor/smInterval/smNextReview in Supabase upsert payload |
 | Public shareable reading lists | 8 | Supabase row-level sharing |
 | **Phase 4 Total** | **53** | ~5 weeks |
 
@@ -1543,7 +1763,7 @@ Body:
 | Golden tests (card designs) | 5 | golden_toolkit |
 | E2E integration tests | 8 | integration_test |
 | Performance profiling (DevTools) — frame budget | 3 | < 16ms per frame |
-| Crashlytics + analytics integration | 3 | Firebase |
+| Crashlytics integration | 3 | ✅ Done — Firebase Crashlytics live (FlutterError.onError + PlatformDispatcher) |
 | App Store assets (screenshots, preview video) | 5 | 6.7" + 5.5" + iPad |
 | Play Store assets | 3 | Feature graphic + screenshots |
 | Privacy policy + terms page | 2 | In-app + hosted |
@@ -1576,7 +1796,7 @@ Body:
 | `watchRecentLinks()` loads entire watch stream | Medium | At 10,000+ links, `watch()` without pagination will re-emit full lists on every change | Add `.limit(50)` and a "load more" paginated provider; use `watchLazy()` for count streams |
 | `getAllLinks()` blocks main thread | Medium | Used by SM-2 and health check — full table scan | Move to background isolate using `Isar.open()` in a compute() call |
 | `collectionsStreamProvider` re-renders home screen | Low | Any folder write re-fires the strip | Debounce with `distinct()` or use a separate `watch()` on count only |
-| SharedPreferences SM-2 at scale | High | 10,000 entries in SharedPreferences causes slow reads | Phase 3: migrate SM-2 data to Isar embedded object on LinkModel |
+| SharedPreferences SM-2 at scale | ~~High~~ **Resolved** | SM-2 state now stored on `LinkModel` Isar fields; `Sm2MigrationService` copies legacy keys on first launch | No further action needed |
 
 ---
 

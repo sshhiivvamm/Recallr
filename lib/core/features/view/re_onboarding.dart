@@ -4,9 +4,12 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:go_router/go_router.dart';
+import 'package:isar/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app_routes.dart';
+import '../../../core/database/isar_service.dart';
+import '../../../data/models/Link/link_model.dart';
 import '../../../theme/recallr_colors.dart';
 
 class ReOnboarding extends StatefulWidget {
@@ -100,7 +103,41 @@ class _ReOnboardingState extends State<ReOnboarding>
     onboardingDone = true; // update in-memory flag BEFORE navigating
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_done', true);
+    await _seedDemoLink();
     if (mounted) context.go('/');
+  }
+
+  // Seeds one demo link so the home screen isn't empty on first launch.
+  // The link is dated 8 days ago so it appears in "Remember This?" and
+  // its SM-2 review is due immediately so it shows up in the review queue.
+  Future<void> _seedDemoLink() async {
+    try {
+      final isar = await IsarService.instance.db;
+      final existing = await isar.linkModels.where().findAll();
+      if (existing.isNotEmpty) return; // only seed on truly fresh installs
+
+      final now = DateTime.now();
+      final demo = LinkModel()
+        ..url = 'https://en.wikipedia.org/wiki/Spaced_repetition'
+        ..title = 'Spaced Repetition — Why You Remember Some Things and Forget Others'
+        ..description =
+            'Spaced repetition is a study technique that exploits the psychological spacing effect. '
+            'Reviewing information at increasing intervals is one of the most effective ways to '
+            'transfer knowledge into long-term memory.'
+        ..domain = 'en.wikipedia.org'
+        ..siteName = 'Wikipedia'
+        ..favicon = 'https://www.google.com/s2/favicons?domain=en.wikipedia.org&sz=64'
+        ..notes = 'Demo link — this is what Recallr is all about. Review it, then save your own links!'
+        ..createdAt = now.subtract(const Duration(days: 8))
+        ..smRepetitions = 0
+        ..smEaseFactor = 2.5
+        ..smInterval = 1
+        ..smNextReview = now; // due immediately so review queue shows it
+
+      await isar.writeTxn(() => isar.linkModels.put(demo));
+    } catch (_) {
+      // Silently skip — don't block onboarding completion on a demo seed failure
+    }
   }
 
   void _next() {

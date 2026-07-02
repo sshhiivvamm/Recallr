@@ -95,9 +95,12 @@ class ReFilteredLinks extends ConsumerWidget {
               child: Icon(icon, size: 16, color: color),
             ),
             const SizedBox(width: 10),
-            Text(
-              title,
-              style: theme.titleLarge!.copyWith(fontWeight: FontWeight.w700),
+            Expanded(
+              child: Text(
+                title,
+                style: theme.titleLarge!.copyWith(fontWeight: FontWeight.w700),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),

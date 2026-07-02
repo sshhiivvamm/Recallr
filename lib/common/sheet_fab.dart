@@ -37,6 +37,11 @@ class _SheetFabHostState extends State<SheetFabHost>
   bool _isOpen = false;
   double? _sheetTopY;
   Animation<double>? _routeAnim;
+  // Navigator that actually pushed the sheet route. Captured explicitly
+  // because the FAB now lives in the root overlay, so deriving a Navigator
+  // from the overlay entry's own BuildContext would resolve to the app's
+  // outermost Navigator instead of the one holding the sheet route.
+  NavigatorState? _sheetNavigator;
 
   // Listener reference so we can cleanly detach it
   void Function(AnimationStatus)? _routeStatusListener;
@@ -65,7 +70,10 @@ class _SheetFabHostState extends State<SheetFabHost>
   void _insertFab() {
     if (!mounted) return;
     _fabEntry = OverlayEntry(builder: _buildFab);
-    Overlay.of(context).insert(_fabEntry!);
+    // Insert into the root overlay so this entry always paints above any
+    // modal route (including nested-navigator sheets), removing the need
+    // to remove/reinsert it once the sheet opens.
+    Overlay.of(context, rootOverlay: true).insert(_fabEntry!);
   }
 
   @override
@@ -103,6 +111,7 @@ class _SheetFabHostState extends State<SheetFabHost>
     _sheetTopY = null;
     _clearRouteAnim();
     _fabAnim.forward();
+    _sheetNavigator = Navigator.of(context);
 
     final sheetFuture = widget.openSheet(
       context,
@@ -118,16 +127,6 @@ class _SheetFabHostState extends State<SheetFabHost>
       },
     );
 
-    // Reinsert overlay on top of the modal after it's pushed
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _fabEntry?.remove();
-        _fabEntry = OverlayEntry(builder: _buildFab);
-        Overlay.of(context).insert(_fabEntry!);
-      });
-    });
-
     await sheetFuture;
 
     // Sheet fully dismissed — ensure route tracking is cleared and
@@ -135,6 +134,7 @@ class _SheetFabHostState extends State<SheetFabHost>
     // dismissed without going through reverse status, e.g. programmatic pop)
     _clearRouteAnim();
     _sheetTopY = null;
+    _sheetNavigator = null;
     if (mounted) {
       await _fabAnim.reverse(); // no-op if already at 0, waits if still bouncing
       if (mounted) {
@@ -182,7 +182,7 @@ class _SheetFabHostState extends State<SheetFabHost>
             alignment: Alignment.bottomRight,
             child: FloatingActionButton(
               heroTag: widget.heroTag,
-              onPressed: _isOpen ? () => Navigator.of(c).pop() : _openSheet,
+              onPressed: _isOpen ? () => _sheetNavigator?.pop() : _openSheet,
               shape: const CircleBorder(),
               child: Transform.rotate(
                 angle: _fabSpin.value * 0.7853981633,
